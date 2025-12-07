@@ -199,40 +199,7 @@
 
             log("Turn ON floor. Apartments: " + apartmentIds.join(", "));
 
-            var groups:Object = {};
-            for each (var aptId:String in apartmentIds) {
-                var status:String = CRMData.getDataById(aptId, "status");
-                var brightness:int = getBrightness(aptId);
-                var color:Array = getColorByStatus(status);
-                var key:String = color.join(",") + "|" + brightness.toString();
-                if (!groups[key]) {
-                    groups[key] = {rooms: [], color: color, brightness: brightness};
-                }
-                groups[key].rooms.push(int(aptId));
-            }
-
-            var keys:Array = [];
-            for (var k:String in groups) {
-                keys.push(k);
-            }
-
-            for (var i:int = 0; i < keys.length; i++) {
-                var groupKey:String = keys[i];
-                var group:Object = groups[groupKey];
-
-                log("  group color=" + group.color + " brightness=" + group.brightness + " rooms=" + group.rooms.join(","));
-
-                var payload:Object = {
-                    cmd: "rooms_on",
-                    rooms: group.rooms,
-                    color: group.color,
-                    brightness: group.brightness,
-                    effect: effect
-                };
-
-                var isLast:Boolean = (i == keys.length - 1);
-                sendJson(payload, isLast ? onComplete : null, onError);
-            }
+            turnOnRoomsBatch(apartmentIds, effect, onComplete, onError);
         }
 
         //-----------------------------
@@ -247,19 +214,24 @@
                 return;
             }
 
-            var payload:Object = {};
+            var rooms:Array = [];
             for each (var aptId:String in apartmentIds) {
                 var status:String = CRMData.getDataById(aptId, "status");
                 var brightness:int = getBrightness(aptId);
                 var color:Array = getColorByStatus(status);
 
-                payload[aptId] = {
-                    cmd: "room_on",
-                    effect: effect,
+                rooms.push({
+                    room: int(aptId),
                     color: color,
-                    brightness: brightness
-                };
+                    brightness: brightness,
+                    effect: effect
+                });
             }
+
+            var payload:Object = {
+                cmd: "rooms_on",
+                rooms: rooms
+            };
 
             log("Turn ON rooms batch: " + apartmentIds.join(","));
             sendJson(payload, onComplete, onError);
