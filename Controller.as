@@ -16,8 +16,8 @@
         private var container:MovieClip;
 
         private var targetScale:Number = 1;
-        private var minScale:Number = 0;
-        private var maxScale:Number = 100;
+        private var minScale:Number = 1;
+        private var maxScale:Number = 5;
         private var targetX:Number;
         private var targetY:Number;
 
