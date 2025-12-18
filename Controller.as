@@ -129,11 +129,11 @@
                 container.x += (targetX - container.x) * ease;
                 container.y += (targetY - container.y) * ease;
 
-                clampPosition();
+                clampPosition(targetScale);
             }
         }
 
-        private function clampPosition():void {
+        private function clampPosition(scaleOverride:Number = -1):void {
             if (!container) return;
 
             var stageWidth:Number = stageRef.stageWidth;
@@ -141,23 +141,25 @@
 
             var bounds:Rectangle = container.getBounds(container);
 
-            var scaledWidth:Number = bounds.width * container.scaleX;
-            var scaledHeight:Number = bounds.height * container.scaleY;
+            var scaleVal:Number = (scaleOverride > 0) ? scaleOverride : container.scaleX;
 
-            var minX:Number = stageWidth - (bounds.x + bounds.width) * container.scaleX;
-            var maxX:Number = -bounds.x * container.scaleX;
+            var scaledWidth:Number = bounds.width * scaleVal;
+            var scaledHeight:Number = bounds.height * scaleVal;
 
-            var minY:Number = stageHeight - (bounds.y + bounds.height) * container.scaleY;
-            var maxY:Number = -bounds.y * container.scaleY;
+            var minX:Number = stageWidth - (bounds.x + bounds.width) * scaleVal;
+            var maxX:Number = -bounds.x * scaleVal;
+
+            var minY:Number = stageHeight - (bounds.y + bounds.height) * scaleVal;
+            var maxY:Number = -bounds.y * scaleVal;
 
             if (scaledWidth <= stageWidth) {
-                targetX = (stageWidth - scaledWidth) / 2 - bounds.x * container.scaleX;
+                targetX = (stageWidth - scaledWidth) / 2 - bounds.x * scaleVal;
             } else {
                 targetX = Math.min(maxX, Math.max(minX, targetX));
             }
 
             if (scaledHeight <= stageHeight) {
-                targetY = (stageHeight - scaledHeight) / 2 - bounds.y * container.scaleY;
+                targetY = (stageHeight - scaledHeight) / 2 - bounds.y * scaleVal;
             } else {
                 targetY = Math.min(maxY, Math.max(minY, targetY));
             }
@@ -188,26 +190,22 @@
                     var newScale:Number = targetScale * scaleRatio;
                     newScale = Math.max(minScale, Math.min(maxScale, newScale));
 
-                    var globalTouch:Point = new Point(currentCenter.x, currentCenter.y);
-                    var localBefore:Point = container.globalToLocal(globalTouch);
+                    // 1. Центр между пальцами в global
+                    var globalCenter:Point = currentCenter.clone();
 
-                    var scaleChange:Number = newScale / targetScale;
+                    // 2. Эта же точка в local контейнера ДО масштаба
+                    var localBefore:Point = container.globalToLocal(globalCenter);
+
+                    // 3. Обновляем целевой масштаб
                     targetScale = newScale;
 
-                    targetX -= (localBefore.x * (scaleChange - 1)) * container.scaleX;
-                    targetY -= (localBefore.y * (scaleChange - 1)) * container.scaleY;
+                    // 4. Пересчитываем позицию так, чтобы globalCenter остался на месте
+                    targetX = globalCenter.x - localBefore.x * targetScale;
+                    targetY = globalCenter.y - localBefore.y * targetScale;
 
-                    clampPosition();
+                    clampPosition(targetScale);
                 }
 
-                if (lastTouchCenter != null) {
-                    var dx2:Number = currentCenter.x - lastTouchCenter.x;
-                    var dy2:Number = currentCenter.y - lastTouchCenter.y;
-                    targetX += dx2;
-                    targetY += dy2;
-
-                    clampPosition();
-                }
 
                 lastTouchDistance = currentDistance;
                 lastTouchCenter = currentCenter.clone();
@@ -331,13 +329,12 @@
             var globalMouse:Point = new Point(e.stageX, e.stageY);
             var localBefore:Point = container.globalToLocal(globalMouse);
 
-            var scaleChange:Number = newScale / targetScale;
             targetScale = newScale;
 
-            targetX -= (localBefore.x * (scaleChange - 1)) * container.scaleX;
-            targetY -= (localBefore.y * (scaleChange - 1)) * container.scaleY;
+            targetX = globalMouse.x - localBefore.x * targetScale;
+            targetY = globalMouse.y - localBefore.y * targetScale;
 
-            clampPosition();
+            clampPosition(targetScale);
         }
     }
 }
