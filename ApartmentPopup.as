@@ -4,11 +4,17 @@
     import flash.display.SimpleButton;
     import flash.events.MouseEvent;
     import flash.events.Event;
+    import flash.events.TransformGestureEvent;
     import flash.text.TextField;
-    import flash.display.Loader;
+    import flash.text.AntiAliasType;
+    import flash.text.GridFitType;
     import flash.display.Bitmap;
-    import flash.net.URLRequest;
-    import flash.events.IOErrorEvent;
+    import flash.geom.Point;
+    import flash.geom.Rectangle;
+    import flash.ui.Multitouch;
+    import flash.ui.MultitouchInputMode;
+    import PhotoPopup;
+    import PhotoPopup_01;
 
     public class ApartmentPopup extends MovieClip {
         public static const CLOSED:String = "ApartmentPopupClosed";
@@ -21,14 +27,31 @@
 
         public var brdr_Image:MovieClip;
         public var btn_ClosePopup:SimpleButton;
+        public var btn_Photo:SimpleButton;
 
-        private var imageLoader:Loader;
+        private var currentBitmap:Bitmap;
         private var currentApartmentNumber:String = "";
         private var darkBg:Sprite;
+        private var photoPopup:PhotoPopup;
+        private var baseBitmapScaleX:Number = 1;
+        private var baseBitmapScaleY:Number = 1;
+        private var popupBaseScaleX:Number = 1;
+        private var popupBaseScaleY:Number = 1;
+        private var zoomFactor:Number = 1;
+        private var targetScaleX:Number = 1;
+        private var targetScaleY:Number = 1;
+        private var targetX:Number = 0;
+        private var targetY:Number = 0;
+        private var rightDrag:Boolean = false;
+        private var lastDragPoint:Point = null;
+        private const MIN_ZOOM:Number = 1;
+        private const MAX_ZOOM:Number = 3;
 
         public function ApartmentPopup() {
             super();
             addEventListener(Event.ADDED_TO_STAGE, onAdded);
+            addEventListener(Event.REMOVED_FROM_STAGE, onRemoved);
+            Multitouch.inputMode = MultitouchInputMode.GESTURE;
         }
 
         private function onAdded(e:Event):void {
@@ -39,14 +62,53 @@
             darkBg.graphics.drawRect(0, 0, stage.stageWidth, stage.stageHeight);
             darkBg.graphics.endFill();
             darkBg.addEventListener(MouseEvent.CLICK, onBackgroundClick);
+            darkBg.addEventListener(MouseEvent.MOUSE_WHEEL, absorbEvent, false, 1, true);
+            darkBg.addEventListener(TransformGestureEvent.GESTURE_ZOOM, absorbEvent, false, 1, true);
 
             if (parent) parent.addChildAt(darkBg, parent.getChildIndex(this));
 
             if (btn_ClosePopup) {
                 btn_ClosePopup.addEventListener(MouseEvent.CLICK, onCloseClick);
             }
+            if (btn_Photo) {
+                btn_Photo.addEventListener(MouseEvent.CLICK, onPhotoClick);
+            }
 
+            configureTextFields();
+            setupInteractionListeners();
             addEventListener(Event.ENTER_FRAME, onNextFrame);
+            addEventListener(Event.ENTER_FRAME, onSmoothUpdate);
+        }
+
+        private function setupInteractionListeners():void {
+            if (stage) {
+                stage.addEventListener(MouseEvent.MOUSE_WHEEL, onMouseWheel, false, 0, true);
+                stage.addEventListener(MouseEvent.RIGHT_MOUSE_DOWN, onRightDown, false, 0, true);
+                stage.addEventListener(MouseEvent.RIGHT_MOUSE_UP, onRightUp, false, 0, true);
+                stage.addEventListener(MouseEvent.MOUSE_MOVE, onMouseMoveDrag, false, 0, true);
+            }
+            if (brdr_Image) {
+                brdr_Image.addEventListener(MouseEvent.MOUSE_WHEEL, onMouseWheel, false, 0, true);
+                brdr_Image.addEventListener(TransformGestureEvent.GESTURE_ZOOM, onGestureZoom, false, 0, true);
+                brdr_Image.addEventListener(TransformGestureEvent.GESTURE_PAN, onGesturePan, false, 0, true);
+            }
+        }
+
+        private function removeInteractionListeners():void {
+            if (stage) {
+                stage.removeEventListener(MouseEvent.MOUSE_WHEEL, onMouseWheel);
+                stage.removeEventListener(MouseEvent.RIGHT_MOUSE_DOWN, onRightDown);
+                stage.removeEventListener(MouseEvent.RIGHT_MOUSE_UP, onRightUp);
+                stage.removeEventListener(MouseEvent.MOUSE_MOVE, onMouseMoveDrag);
+            }
+            if (brdr_Image) {
+                brdr_Image.removeEventListener(MouseEvent.MOUSE_WHEEL, onMouseWheel);
+                brdr_Image.removeEventListener(TransformGestureEvent.GESTURE_ZOOM, onGestureZoom);
+                brdr_Image.removeEventListener(TransformGestureEvent.GESTURE_PAN, onGesturePan);
+            }
+            if (btn_Photo) {
+                btn_Photo.removeEventListener(MouseEvent.CLICK, onPhotoClick);
+            }
         }
 
         private function onNextFrame(e:Event):void {
@@ -54,6 +116,13 @@
 
             this.x = (stage.stageWidth  - this.width)  * 0.5;
             this.y = (stage.stageHeight - this.height) * 0.5 + 300;
+            popupBaseScaleX = this.scaleX;
+            popupBaseScaleY = this.scaleY;
+            zoomFactor = 1;
+            targetScaleX = this.scaleX;
+            targetScaleY = this.scaleY;
+            targetX = this.x;
+            targetY = this.y;
         }
 
         private function onBackgroundClick(e:MouseEvent):void {
@@ -64,9 +133,15 @@
             closePopup();
         }
 
+        private function onRemoved(e:Event):void {
+            removeInteractionListeners();
+            removeEventListener(Event.ENTER_FRAME, onSmoothUpdate);
+        }
+
         private function closePopup():void {
             // Сообщаем подписчикам, что попап закрывается (bubbles=true для ловли на сцене)
             dispatchEvent(new Event(CLOSED, true));
+            removeInteractionListeners();
             if (darkBg && darkBg.parent) darkBg.parent.removeChild(darkBg);
             if (parent) parent.removeChild(this);
         }
@@ -77,21 +152,23 @@
 
         private function loadImage(url:String):void {
             if (!brdr_Image) return;
+            if (!url || url.length == 0) return;
 
-            if (imageLoader && imageLoader.parent) {
-                imageLoader.parent.removeChild(imageLoader);
-            }
+            var requestedFor:String = currentApartmentNumber;
 
-            imageLoader = new Loader();
-            imageLoader.contentLoaderInfo.addEventListener(Event.COMPLETE, onImageLoaded);
-            imageLoader.contentLoaderInfo.addEventListener(IOErrorEvent.IO_ERROR, onImageError);
+            ImageCache.getBitmap(url, function(bmp:Bitmap):void {
+                // ignore if meanwhile открыли другую квартиру
+                if (requestedFor != currentApartmentNumber) return;
+                if (!bmp || !bmp.bitmapData) return;
 
-            try { imageLoader.load(new URLRequest(url)); } catch (e:*) {}
+                renderBitmap(bmp);
+            }, function(err:String):void {
+                trace("[ApartmentPopup] Ошибка загрузки изображения:", err);
+            });
         }
 
-        private function onImageLoaded(e:Event):void {
-            var bmp:Bitmap = imageLoader.content as Bitmap;
-            if (!bmp || !bmp.bitmapData) return;
+        private function renderBitmap(bmp:Bitmap):void {
+            if (!brdr_Image || !bmp) return;
 
             bmp.smoothing = true;
 
@@ -106,6 +183,7 @@
                 brdr_Image.removeChildAt(0);
             }
 
+            currentBitmap = bmp;
             brdr_Image.addChild(bmp);
 
             bmp.scaleX = frameW / origW;
@@ -113,9 +191,10 @@
 
             bmp.x = bounds.x * -1;
             bmp.y = bounds.y * -1;
-        }
 
-        private function onImageError(e:IOErrorEvent):void {}
+            baseBitmapScaleX = bmp.scaleX;
+            baseBitmapScaleY = bmp.scaleY;
+        }
 
         public function showApartmentInfo(apartmentNumber:String):void {
             currentApartmentNumber = apartmentNumber;
@@ -148,6 +227,122 @@
             }
 
             if (imageUrl) loadImage(imageUrl);
+        }
+
+        private function onMouseWheel(e:MouseEvent):void {
+            if (!hitTestPoint(e.stageX, e.stageY, true)) return;
+            var factor:Number = (e.delta > 0) ? 1.1 : 0.9;
+            e.stopImmediatePropagation();
+            applyZoom(factor, e.stageX, e.stageY);
+        }
+
+        private function onGestureZoom(e:TransformGestureEvent):void {
+            if (!hitTestPoint(e.stageX, e.stageY, true)) return;
+            e.stopImmediatePropagation();
+            applyZoom(e.scaleX, e.stageX, e.stageY);
+        }
+
+        private function onGesturePan(e:TransformGestureEvent):void {
+            if (!hitTestPoint(e.stageX, e.stageY, true)) return;
+            e.stopImmediatePropagation();
+            targetX += e.offsetX;
+            targetY += e.offsetY;
+        }
+
+        private function applyZoom(factor:Number, stageX:Number, stageY:Number):void {
+            if (!parent) return;
+
+            var oldZoom:Number = zoomFactor;
+            var newZoom:Number = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, zoomFactor * factor));
+            var applied:Number = newZoom / oldZoom;
+            if (applied == 1) return;
+
+            zoomFactor = newZoom;
+
+            var globalPoint:Point = new Point(stageX, stageY);
+            var localPointBefore:Point = this.globalToLocal(globalPoint);
+
+            targetScaleX = popupBaseScaleX * zoomFactor;
+            targetScaleY = popupBaseScaleY * zoomFactor;
+
+            var globalPointAfter:Point = localToGlobalWithScale(localPointBefore, targetScaleX, targetScaleY);
+            var dx:Number = globalPoint.x - globalPointAfter.x;
+            var dy:Number = globalPoint.y - globalPointAfter.y;
+
+            targetX += dx;
+            targetY += dy;
+        }
+
+        private function absorbEvent(e:Event):void {
+            e.stopImmediatePropagation();
+        }
+
+        private function configureTextFields():void {
+            applyTextSettings(tfNumber);
+            applyTextSettings(tfType);
+            applyTextSettings(tfStatus);
+            applyTextSettings(tfSquare);
+            applyTextSettings(tfArea);
+            applyTextSettings(tfBigText);
+        }
+
+        private function applyTextSettings(tf:TextField):void {
+            if (!tf) return;
+            tf.antiAliasType = AntiAliasType.ADVANCED;
+            tf.gridFitType = GridFitType.SUBPIXEL;
+            tf.cacheAsBitmap = true;
+        }
+
+        private function onRightDown(e:MouseEvent):void {
+            // RIGHT_MOUSE_DOWN сюда уже приходит, отдельная проверка buttonIndex не нужна
+            rightDrag = true;
+            lastDragPoint = new Point(e.stageX, e.stageY);
+            e.stopImmediatePropagation();
+        }
+
+        private function onRightUp(e:MouseEvent):void {
+            rightDrag = false;
+            lastDragPoint = null;
+        }
+
+        private function onMouseMoveDrag(e:MouseEvent):void {
+            if (!rightDrag || !lastDragPoint) return;
+            var dx:Number = e.stageX - lastDragPoint.x;
+            var dy:Number = e.stageY - lastDragPoint.y;
+            if (dx == 0 && dy == 0) return;
+            targetX += dx;
+            targetY += dy;
+            lastDragPoint.x = e.stageX;
+            lastDragPoint.y = e.stageY;
+            e.stopImmediatePropagation();
+        }
+
+        private function localToGlobalWithScale(local:Point, sx:Number, sy:Number):Point {
+            return new Point(this.x + local.x * sx, this.y + local.y * sy);
+        }
+
+        private function onSmoothUpdate(e:Event):void {
+            var ease:Number = 0.4;
+            this.scaleX += (targetScaleX - this.scaleX) * ease;
+            this.scaleY += (targetScaleY - this.scaleY) * ease;
+            this.x += (targetX - this.x) * ease;
+            this.y += (targetY - this.y) * ease;
+        }
+
+        private function onPhotoClick(e:MouseEvent):void {
+            e.stopImmediatePropagation();
+            if (!stage) return;
+            if (!photoPopup) {
+                try {
+                    photoPopup = new PhotoPopup_01();
+                } catch (err:Error) {
+                    photoPopup = new PhotoPopup();
+                }
+            }
+            if (!photoPopup.stage) {
+                stage.addChild(photoPopup);
+            }
+            photoPopup.showForApartment(currentApartmentNumber);
         }
 
         private function getTypeDescription(type:String):String {

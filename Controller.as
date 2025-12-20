@@ -10,6 +10,7 @@
     import flash.geom.Rectangle;
     import flash.display.DisplayObject;
     import flash.display.DisplayObjectContainer;
+    import GlobalData;
 
 
     public class Controller {
@@ -167,10 +168,12 @@
 
         // Touch handlers без изменений
         private function onTouchBegin(e:TouchEvent):void {
+            if (isPopupActive()) return;
             activeTouches[e.touchPointID] = new Point(e.stageX, e.stageY);
         }
 
         private function onTouchMove(e:TouchEvent):void {
+            if (isPopupActive()) return;
             activeTouches[e.touchPointID] = new Point(e.stageX, e.stageY);
 
             if (getTouchCount() == 2) {
@@ -320,6 +323,7 @@
 
 
         private function onMouseWheel(e:MouseEvent):void {
+            if (isPopupActive()) return;
             var wheelDelta:int = e.delta;
             var factor:Number = (wheelDelta > 0) ? 1.1 : 1 / 1.1;
 
@@ -335,6 +339,10 @@
             targetY = globalMouse.y - localBefore.y * targetScale;
 
             clampPosition(targetScale);
+        }
+
+        private function isPopupActive():Boolean {
+            return GlobalData.popup != null && GlobalData.popup.stage != null;
         }
     }
 }
