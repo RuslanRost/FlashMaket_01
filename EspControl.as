@@ -48,7 +48,28 @@
         //-----------------------------
         public function sendJson(data:Object,
                                  onComplete:Function = null,
-                                 onError:Function = null):void {
+                                 onError:Function = null,
+                                 preTurnOff:Boolean = true):void {
+            if (preTurnOff) {
+                // Сначала ждём ответа от all_off, затем отправляем основную команду
+                sendJsonInternal(
+                    { cmd: "all_off", effect: "instant" },
+                    function(_:*=null):void {
+                        sendJsonInternal(data, onComplete, onError);
+                    },
+                    function(err:String):void {
+                        log("Pre all_off error: " + err + " -> продолжаем с основной командой");
+                        sendJsonInternal(data, onComplete, onError);
+                    }
+                );
+            } else {
+                sendJsonInternal(data, onComplete, onError);
+            }
+        }
+
+        private function sendJsonInternal(data:Object,
+                                          onComplete:Function = null,
+                                          onError:Function = null):void {
 
             var jsonString:String = JSON.stringify(data);
             var url:String = deviceIP + "/";
@@ -190,16 +211,30 @@
         }
 
         //-----------------------------
-        // Turn ON whole floor
+        // Turn ON whole floor (using floor_on)
         //-----------------------------
-        public function turnOnFloor(apartmentIds:Array,
-                                    effect:String="instant",
-                                    onComplete:Function=null,
-                                    onError:Function=null):void {
+        public function floorOn(floor:int,
+                                color:Array = null,
+                                brightness:int = 255,
+                                effect:String="instant",
+                                onComplete:Function=null,
+                                onError:Function=null):void {
 
-            log("Turn ON floor. Apartments: " + apartmentIds.join(", "));
+            if (color == null) color = [255, 255, 255];
+            if (brightness < 0 || brightness > 255) brightness = 255;
 
-            turnOnRoomsBatch(apartmentIds, effect, onComplete, onError);
+            log("Turn ON floor via floor_on -> floor:" + floor + ", color:" + color + ", brightness:" + brightness + ", effect:" + effect);
+
+            var payload:Object = {
+                cmd: "floor_on",
+                floor: floor,
+                color: color,
+                brightness: brightness,
+                effect: effect
+            };
+
+            log("floorOn payload -> cmd=" + payload.cmd + ", floor=" + floor + ", color=" + color + ", brightness=" + brightness + ", effect=" + effect);
+            sendJson(payload, onComplete, onError);
         }
 
         //-----------------------------
@@ -208,7 +243,8 @@
         public function turnOnRoomsBatch(apartmentIds:Array,
                                          effect:String="instant",
                                          onComplete:Function=null,
-                                         onError:Function=null):void {
+                                         onError:Function=null,
+                                         preTurnOff:Boolean=true):void {
             if (!apartmentIds || apartmentIds.length == 0) {
                 log("turnOnRoomsBatch: empty apartmentIds");
                 return;
@@ -234,7 +270,35 @@
             };
 
             log("Turn ON rooms batch: " + apartmentIds.join(","));
-            sendJson(payload, onComplete, onError);
+            sendJson(payload, onComplete, onError, preTurnOff);
+        }
+
+        //-----------------------------
+        // Turn OFF multiple rooms in one JSON (batch structure)
+        //-----------------------------
+        public function turnOffRoomsBatch(apartmentIds:Array,
+                                          effect:String="instant",
+                                          onComplete:Function=null,
+                                          onError:Function=null,
+                                          preTurnOff:Boolean=false):void {
+            if (!apartmentIds || apartmentIds.length == 0) {
+                log("turnOffRoomsBatch: empty apartmentIds");
+                return;
+            }
+
+            var payload:Object = {
+                cmd: "rooms_off",
+                effect: effect,
+                rooms: []
+            };
+
+            for each (var aptId:String in apartmentIds) {
+                payload.rooms.push(int(aptId));
+            }
+
+            log("Turn OFF rooms batch: " + apartmentIds.join(","));
+            // Явно отключаем предварительный all_off, т.к. сами управляем списками
+            sendJson(payload, onComplete, onError, preTurnOff);
         }
 
         //-----------------------------
@@ -269,10 +333,10 @@
 
             var payload:Object = {
                 cmd: "all_off",
-                effect: effect
+                effect: "instant"
             };
 
-            sendJson(payload, onComplete, onError);
+            sendJson(payload, onComplete, onError, false);
         }
 
         //-----------------------------

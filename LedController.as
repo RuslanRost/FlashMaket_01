@@ -8,7 +8,7 @@
         }
 
         //----------------------------------------------
-        // Цвет как HEX → перевод в RGB Array для ESP
+        // Цвет как HEX -> перевод в RGB Array для ESP
         //----------------------------------------------
         private function hexToRGB(hex:String):Array {
             hex = hex.replace("#", "");
@@ -30,7 +30,7 @@
                 case "Reserved": return "#FFFF00";        // жёлтый
                 case "Occupied": return "#FF0000";        // красный
                 case "Closed for sale": return "#FFFFFF"; // белый
-                default: return "#000000";                // чёрный
+                default: return "#000000";                 // чёрный
             }
         }
 
@@ -45,10 +45,10 @@
                 return;
             }
 
-            trace("[LED] Подсветка квартиры по статусу → " + roomId);
+            trace("[LED] Подсветка квартиры по статусу > " + roomId);
 
             // Используем ESP функцию включения одной квартиры
-            esp.turnOnApartment(roomId);
+            esp.turnOnApartment(roomId, "pulse");
         }
 
         //----------------------------------------------
@@ -65,43 +65,34 @@
         }
 
         //----------------------------------------------
-        // МИГАНИЕ ЭТАЖА - только расчёт, подсветку не меняем
+        // МИГАНИЕ ЭТАЖА - используем floor_on
         //----------------------------------------------
         public function blinkFloorByStatus(floorId:int):void {
             var apartments:Object = CRMData.getAllData();
 
-            if(!apartments) {
+            if (!apartments) {
                 trace("[LED] Нет данных CRM");
                 return;
             }
 
             var floor:String = floorId.toString();
-            var colors:Object = {};
-            var ids:Array = [];
+            var hasAny:Boolean = false;
 
             for (var id:String in apartments) {
                 if (id.indexOf(floor) == 0) {
-                    ids.push(id);
-                    var status:String = CRMData.getDataById(id, "status");
-                    if (status) {
-                        var c:String = getHexColorByStatus(status);
-                        colors[c] = (colors[c] == undefined) ? 1 : colors[c] + 1;
-                    }
+                    hasAny = true;
+                    break;
                 }
             }
 
-            var summary:String = "";
-            for (var col:String in colors) summary += col + " x" + colors[col] + ", ";
-
-            if (summary.length == 0) summary = "Нет квартир на этаже";
-            else summary = summary.slice(0, -2);
-
-            trace("[LED] Мигаем этажом " + floorId + ": " + summary);
-
-            if (ids.length > 0) {
-                // используем эффект blink через batch-команду
-                esp.turnOnRoomsBatch(ids, "blink");
+            if (!hasAny) {
+                trace("[LED] Нет квартир на этаже " + floorId);
+                return;
             }
+
+            trace("[LED] Мигаем этажом через floor_on " + floorId);
+            // Передаём effect=blink, остальные параметры по умолчанию
+            esp.floorOn(floorId, null, 255, "blink3");
         }
 
         //----------------------------------------------
@@ -111,23 +102,24 @@
 
             var apartments:Object = CRMData.getAllData();
             var floorId:String = floor.toString();
-            var ids:Array = [];
+            var hasAny:Boolean = false;
 
             for (var apt:String in apartments) {
                 if (apt.indexOf(floorId) == 0) {
-                    ids.push(apt);
+                    hasAny = true;
+                    break;
                 }
             }
 
-            if (ids.length == 0) {
+            if (!hasAny) {
                 trace("[LED] Нет квартир на этаже " + floor);
                 return;
             }
 
-            trace("[LED] Подсветка этажа " + floor + " → " + ids.join(", "));
+            trace("[LED] Подсветка этажа (floor_on) " + floor);
 
-            // вызыаем ESP функцию включения этажа
-            esp.turnOnFloor(ids);
+            // API floor_on: передаём номер этажа (zero-based), остальные параметры дефолтные
+            esp.floorOn(floor);
         }
 
         //----------------------------------------------
@@ -149,11 +141,48 @@
 
             if (ids.length == 0) {
                 trace("[LED] Нет видимых (отфильтрованных) квартир для подсветки");
-                return;
+                // даже если видимых нет, всё равно нужно погасить остальные
             }
 
-            trace("[LED] Подсветка видимых квартир → " + ids.join(", "));
-            esp.turnOnRoomsBatch(ids);
+            // Собираем список невидимых квартир, чтобы отправить rooms_off без общего all_off
+            var apartments:Object = CRMData.getAllData();
+            var invisible:Array = [];
+            var visibleSet:Object = {};
+            for each (var vid:String in ids) visibleSet[vid] = true;
+
+            // Определяем текущий этаж (по активной кнопке, иначе по первой видимой)
+            var currentFloor:int = extractFloorNumber(GlobalData.activeButtonName);
+            if (currentFloor < 0 && ids.length > 0) {
+                currentFloor = extractFloorNumber(ids[0]);
+            }
+
+            for (var apt:String in apartments) {
+                if (!visibleSet.hasOwnProperty(apt)) {
+                    if (currentFloor >= 0) {
+                        // Ограничиваемся только текущим этажом
+                        if (extractFloorNumber(apt) != currentFloor) continue;
+                    }
+                    invisible.push(apt);
+                }
+            }
+
+            if (ids.length > 0) {
+                trace("[LED] Подсветка видимых квартир > " + ids.join(", "));
+                esp.turnOnRoomsBatch(ids, "instant", null, null, false);
+            }
+
+            if (invisible.length > 0) {
+                trace("[LED] Гасим невидимые квартиры > " + invisible.join(", "));
+                esp.turnOffRoomsBatch(invisible, "instant", null, null, false);
+            }
+        }
+
+        private function extractFloorNumber(apartmentId:String):int {
+            if (!apartmentId || apartmentId.length == 0) return -1;
+            var firstChar:String = apartmentId.charAt(0);
+            var n:int = parseInt(firstChar);
+            if (isNaN(n)) return -1;
+            return n;
         }
 
         //----------------------------------------------
@@ -171,7 +200,7 @@
         // Отключить ВСЕ
         //----------------------------------------------
         public function resetLighting():void {
-            trace("[LED] Reset — выключаем все светодиоды");
+            trace("[LED] Reset - выключаем все светодиоды");
             esp.turnOffAll();
         }
 
