@@ -65,7 +65,7 @@
         }
 
         //----------------------------------------------
-        // МИГАНИЕ ЭТАЖА — только расчёт, подсветку не меняем
+        // МИГАНИЕ ЭТАЖА - только расчёт, подсветку не меняем
         //----------------------------------------------
         public function blinkFloorByStatus(floorId:int):void {
             var apartments:Object = CRMData.getAllData();
@@ -77,9 +77,11 @@
 
             var floor:String = floorId.toString();
             var colors:Object = {};
+            var ids:Array = [];
 
             for (var id:String in apartments) {
                 if (id.indexOf(floor) == 0) {
+                    ids.push(id);
                     var status:String = CRMData.getDataById(id, "status");
                     if (status) {
                         var c:String = getHexColorByStatus(status);
@@ -95,6 +97,11 @@
             else summary = summary.slice(0, -2);
 
             trace("[LED] Мигаем этажом " + floorId + ": " + summary);
+
+            if (ids.length > 0) {
+                // используем эффект blink через batch-команду
+                esp.turnOnRoomsBatch(ids, "blink");
+            }
         }
 
         //----------------------------------------------
