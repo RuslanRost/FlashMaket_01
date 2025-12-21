@@ -46,8 +46,9 @@
         private var targetScaleY:Number = 1;
         private var targetX:Number = 0;
         private var targetY:Number = 0;
-        private var rightDrag:Boolean = false;
+        private var mouseDrag:Boolean = false;
         private var lastDragPoint:Point = null;
+        private var previousInputMode:String = null;
         private const MIN_ZOOM:Number = 1;
         private const MAX_ZOOM:Number = 3;
 
@@ -55,11 +56,12 @@
             super();
             addEventListener(Event.ADDED_TO_STAGE, onAdded);
             addEventListener(Event.REMOVED_FROM_STAGE, onRemoved);
-            Multitouch.inputMode = MultitouchInputMode.GESTURE;
         }
 
         private function onAdded(e:Event):void {
             removeEventListener(Event.ADDED_TO_STAGE, onAdded);
+            previousInputMode = Multitouch.inputMode;
+            Multitouch.inputMode = MultitouchInputMode.GESTURE;
 
             darkBg = new Sprite();
             darkBg.graphics.beginFill(0x000000, 0.5);
@@ -90,28 +92,32 @@
         private function setupInteractionListeners():void {
             if (stage) {
                 stage.addEventListener(MouseEvent.MOUSE_WHEEL, onMouseWheel, false, 0, true);
-                stage.addEventListener(MouseEvent.RIGHT_MOUSE_DOWN, onRightDown, false, 0, true);
-                stage.addEventListener(MouseEvent.RIGHT_MOUSE_UP, onRightUp, false, 0, true);
+                stage.addEventListener(MouseEvent.MOUSE_DOWN, onMouseDownDrag, false, 0, true);
+                stage.addEventListener(MouseEvent.MOUSE_UP, onMouseUpDrag, false, 0, true);
                 stage.addEventListener(MouseEvent.MOUSE_MOVE, onMouseMoveDrag, false, 0, true);
+                stage.addEventListener(TransformGestureEvent.GESTURE_ZOOM, onGestureZoom, false, 0, true);
+                stage.addEventListener(TransformGestureEvent.GESTURE_PAN, onGesturePanSingle, false, 0, true);
             }
             if (brdr_Image) {
                 brdr_Image.addEventListener(MouseEvent.MOUSE_WHEEL, onMouseWheel, false, 0, true);
                 brdr_Image.addEventListener(TransformGestureEvent.GESTURE_ZOOM, onGestureZoom, false, 0, true);
-                brdr_Image.addEventListener(TransformGestureEvent.GESTURE_PAN, onGesturePan, false, 0, true);
+                brdr_Image.addEventListener(TransformGestureEvent.GESTURE_PAN, onGesturePanSingle, false, 0, true);
             }
         }
 
         private function removeInteractionListeners():void {
             if (stage) {
                 stage.removeEventListener(MouseEvent.MOUSE_WHEEL, onMouseWheel);
-                stage.removeEventListener(MouseEvent.RIGHT_MOUSE_DOWN, onRightDown);
-                stage.removeEventListener(MouseEvent.RIGHT_MOUSE_UP, onRightUp);
+                stage.removeEventListener(MouseEvent.MOUSE_DOWN, onMouseDownDrag);
+                stage.removeEventListener(MouseEvent.MOUSE_UP, onMouseUpDrag);
                 stage.removeEventListener(MouseEvent.MOUSE_MOVE, onMouseMoveDrag);
+                stage.removeEventListener(TransformGestureEvent.GESTURE_ZOOM, onGestureZoom);
+                stage.removeEventListener(TransformGestureEvent.GESTURE_PAN, onGesturePanSingle);
             }
             if (brdr_Image) {
                 brdr_Image.removeEventListener(MouseEvent.MOUSE_WHEEL, onMouseWheel);
                 brdr_Image.removeEventListener(TransformGestureEvent.GESTURE_ZOOM, onGestureZoom);
-                brdr_Image.removeEventListener(TransformGestureEvent.GESTURE_PAN, onGesturePan);
+                brdr_Image.removeEventListener(TransformGestureEvent.GESTURE_PAN, onGesturePanSingle);
             }
             if (btn_Photo) {
                 btn_Photo.removeEventListener(MouseEvent.CLICK, onPhotoClick);
@@ -146,6 +152,9 @@
         private function onRemoved(e:Event):void {
             removeInteractionListeners();
             removeEventListener(Event.ENTER_FRAME, onSmoothUpdate);
+            if (previousInputMode != null) {
+                Multitouch.inputMode = previousInputMode;
+            }
         }
 
         private function closePopup():void {
@@ -226,10 +235,10 @@
 
             // площадь
             var sqNum:Number = Number(square);
-            var sqText:String = Math.round(sqNum).toString() + " м²";
+            var sqText:String = (isNaN(sqNum) || sqNum == 0) ? "-" : Math.round(sqNum).toString() + " м²";
 
             // вывод
-            tfType.text   = type ? type : "";
+            tfType.text   = (type && type != "0") ? type : "-";
             tfStatus.text = statusRu;
             tfArea.text   = sqText;
             if (tfBigText) {
@@ -241,7 +250,7 @@
 
         private function onMouseWheel(e:MouseEvent):void {
             if (!hitTestPoint(e.stageX, e.stageY, true)) return;
-            var factor:Number = (e.delta > 0) ? 1.1 : 0.9;
+            var factor:Number = (e.delta > 0) ? 1.15 : 0.85;
             e.stopImmediatePropagation();
             applyZoom(factor, e.stageX, e.stageY);
         }
@@ -252,7 +261,7 @@
             applyZoom(e.scaleX, e.stageX, e.stageY);
         }
 
-        private function onGesturePan(e:TransformGestureEvent):void {
+        private function onGesturePanSingle(e:TransformGestureEvent):void {
             if (!hitTestPoint(e.stageX, e.stageY, true)) return;
             e.stopImmediatePropagation();
             targetX += e.offsetX;
@@ -303,20 +312,21 @@
             tf.cacheAsBitmap = true;
         }
 
-        private function onRightDown(e:MouseEvent):void {
-            // RIGHT_MOUSE_DOWN сюда уже приходит, отдельная проверка buttonIndex не нужна
-            rightDrag = true;
-            lastDragPoint = new Point(e.stageX, e.stageY);
-            e.stopImmediatePropagation();
+        private function onMouseDownDrag(e:MouseEvent):void {
+            if (e.buttonDown && hitTestPoint(e.stageX, e.stageY, true)) {
+                mouseDrag = true;
+                lastDragPoint = new Point(e.stageX, e.stageY);
+                e.stopImmediatePropagation();
+            }
         }
 
-        private function onRightUp(e:MouseEvent):void {
-            rightDrag = false;
+        private function onMouseUpDrag(e:MouseEvent):void {
+            mouseDrag = false;
             lastDragPoint = null;
         }
 
         private function onMouseMoveDrag(e:MouseEvent):void {
-            if (!rightDrag || !lastDragPoint) return;
+            if (!mouseDrag || !lastDragPoint) return;
             var dx:Number = e.stageX - lastDragPoint.x;
             var dy:Number = e.stageY - lastDragPoint.y;
             if (dx == 0 && dy == 0) return;
@@ -382,3 +392,7 @@
         }
     }
 }
+
+
+
+

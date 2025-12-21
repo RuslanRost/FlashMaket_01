@@ -1,4 +1,4 @@
-package {
+﻿package {
     import flash.display.MovieClip;
     import flash.display.Sprite;
     import flash.display.SimpleButton;
@@ -15,12 +15,13 @@ package {
     import flash.text.TextField;
 
     /**
-     * Простой полноэкранный попап-заглушка под фото.
-     * Затемняет сцену и блокирует прокрутку/пинч под собой.
+     * РџСЂРѕСЃС‚РѕР№ РїРѕР»РЅРѕСЌРєСЂР°РЅРЅС‹Р№ РїРѕРїР°Рї-Р·Р°РіР»СѓС€РєР° РїРѕРґ С„РѕС‚Рѕ.
+     * Р—Р°С‚РµРјРЅСЏРµС‚ СЃС†РµРЅСѓ Рё Р±Р»РѕРєРёСЂСѓРµС‚ РїСЂРѕРєСЂСѓС‚РєСѓ/РїРёРЅС‡ РїРѕРґ СЃРѕР±РѕР№.
      */
     public class PhotoPopup extends MovieClip {
-        // Фон/оверлей убран, чтобы показывать графику из символа.
+        // Р¤РѕРЅ/РѕРІРµСЂР»РµР№ СѓР±СЂР°РЅ, С‡С‚РѕР±С‹ РїРѕРєР°Р·С‹РІР°С‚СЊ РіСЂР°С„РёРєСѓ РёР· СЃРёРјРІРѕР»Р°.
         private var absorber:Sprite;
+        private var previousInputMode:String = null;
         public var BtnCloseImage:SimpleButton;
         public var BaseImage:MovieClip;
         public var btn_previous:SimpleButton;
@@ -38,12 +39,13 @@ package {
 
         public function PhotoPopup() {
             super();
+            previousInputMode = Multitouch.inputMode;
             Multitouch.inputMode = MultitouchInputMode.GESTURE;
             addEventListener(Event.ADDED_TO_STAGE, onAdded);
             addEventListener(Event.REMOVED_FROM_STAGE, onRemoved);
         }
 
-        // Вызывается снаружи, сейчас ничего не делает кроме гарантии создания попапа
+        // Р’С‹Р·С‹РІР°РµС‚СЃСЏ СЃРЅР°СЂСѓР¶Рё, СЃРµР№С‡Р°СЃ РЅРёС‡РµРіРѕ РЅРµ РґРµР»Р°РµС‚ РєСЂРѕРјРµ РіР°СЂР°РЅС‚РёРё СЃРѕР·РґР°РЅРёСЏ РїРѕРїР°РїР°
         public function showForApartment(apartmentId:String):void {
             currentApartmentId = apartmentId;
             clearLoadedBitmaps();
@@ -52,12 +54,12 @@ package {
 
             var type:String = CRMData.getDataById(apartmentId, "type");
             if (tfPhotoType) {
-                tfPhotoType.text = type ? type : "";
+                tfPhotoType.text = (type && type != "0") ? type : "-";
             }
             var square:* = CRMData.getDataById(apartmentId, "square");
             if (tfPhotoArea) {
                 var sqNum:Number = Number(square);
-                var sqText:String = Math.round(sqNum).toString() + " м²";
+                var sqText:String = (isNaN(sqNum) || sqNum == 0) ? "-" : Math.round(sqNum).toString() + " м²";
                 tfPhotoArea.text = sqText;
             }
             var roomsVal:* = CRMData.getDataById(apartmentId, "rooms");
@@ -86,7 +88,7 @@ package {
         private function onAdded(e:Event):void {
             if (!stage) return;
 
-            // Чтобы перехватывать колесо/пинч, но не рисовать оверлей
+            // Р§С‚РѕР±С‹ РїРµСЂРµС…РІР°С‚С‹РІР°С‚СЊ РєРѕР»РµСЃРѕ/РїРёРЅС‡, РЅРѕ РЅРµ СЂРёСЃРѕРІР°С‚СЊ РѕРІРµСЂР»РµР№
             absorber = new Sprite();
             absorber.mouseEnabled = false;
             addChildAt(absorber, 0);
@@ -109,6 +111,9 @@ package {
             cleanupListeners();
             if (!hasEventListener(Event.ADDED_TO_STAGE)) {
                 addEventListener(Event.ADDED_TO_STAGE, onAdded);
+            }
+            if (previousInputMode != null) {
+                Multitouch.inputMode = previousInputMode;
             }
         }
 
@@ -150,7 +155,7 @@ package {
                 placeBitmapIntoSlot(slot, bmp);
                 addActiveBitmap(bmp);
             }, function(err:String):void {
-                trace("[PhotoPopup] Ошибка загрузки " + url + ": " + err);
+                trace("[PhotoPopup] РћС€РёР±РєР° Р·Р°РіСЂСѓР·РєРё " + url + ": " + err);
             });
         }
 
@@ -288,7 +293,7 @@ package {
 
         private function formatRooms(val:*):String {
             var n:int = int(val);
-            if (n <= 0) return "";
+            if (n <= 0) return "-";
             var suffix:String = "комнат";
             if (n == 1) suffix = "комната";
             else if (n >= 2 && n <= 4) suffix = "комнаты";
@@ -297,3 +302,6 @@ package {
         }
     }
 }
+
+
+

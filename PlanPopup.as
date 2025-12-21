@@ -1,4 +1,4 @@
-package {
+﻿package {
     import flash.display.MovieClip;
     import flash.display.Sprite;
     import flash.display.SimpleButton;
@@ -13,11 +13,12 @@ package {
     import flash.text.TextField;
 
     /**
-     * Полноэкранный попап для планировок.
-     * Одно изображение, вписывается в BaseImage, закрытие по кнопке.
+     * РџРѕР»РЅРѕСЌРєСЂР°РЅРЅС‹Р№ РїРѕРїР°Рї РґР»СЏ РїР»Р°РЅРёСЂРѕРІРѕРє.
+     * РћРґРЅРѕ РёР·РѕР±СЂР°Р¶РµРЅРёРµ, РІРїРёСЃС‹РІР°РµС‚СЃСЏ РІ BaseImage, Р·Р°РєСЂС‹С‚РёРµ РїРѕ РєРЅРѕРїРєРµ.
      */
     public class PlanPopup extends MovieClip {
         private var absorber:Sprite;
+        private var previousInputMode:String = null;
         public var BtnCloseImage:SimpleButton;
         public var BaseImage:MovieClip;
         public var tfPlanType:TextField;
@@ -31,6 +32,7 @@ package {
 
         public function PlanPopup() {
             super();
+            previousInputMode = Multitouch.inputMode;
             Multitouch.inputMode = MultitouchInputMode.GESTURE;
             addEventListener(Event.ADDED_TO_STAGE, onAdded);
             addEventListener(Event.REMOVED_FROM_STAGE, onRemoved);
@@ -42,12 +44,12 @@ package {
 
             var type:String = CRMData.getDataById(apartmentId, "type");
             if (tfPlanType) {
-                tfPlanType.text = type ? type : "";
+                tfPlanType.text = (type && type != "0") ? type : "-";
             }
             var square:* = CRMData.getDataById(apartmentId, "square");
             if (tfPlanArea) {
                 var sqNum:Number = Number(square);
-                var sqText:String = Math.round(sqNum).toString() + " м²";
+                var sqText:String = (isNaN(sqNum) || sqNum == 0) ? "-" : Math.round(sqNum).toString() + " м²";
                 tfPlanArea.text = sqText;
             }
             var roomsVal:* = CRMData.getDataById(apartmentId, "rooms");
@@ -57,13 +59,13 @@ package {
             var living:* = CRMData.getDataById(apartmentId, "area_living");
             if (tfPlanLivingArea) {
                 var livNum:Number = Number(living);
-                var livText:String = Math.round(livNum).toString() + " м²";
+                var livText:String = (isNaN(livNum) || livNum == 0) ? "-" : Math.round(livNum).toString() + " м²";
                 tfPlanLivingArea.text = livText;
             }
             var balcony:* = CRMData.getDataById(apartmentId, "area_balcony");
             if (tfPlanBalkonArea) {
                 var balNum:Number = Number(balcony);
-                var balText:String = Math.round(balNum).toString() + " м²";
+                var balText:String = (isNaN(balNum) || balNum == 0) ? "-" : Math.round(balNum).toString() + " м²";
                 tfPlanBalkonArea.text = balText;
             }
 
@@ -81,7 +83,7 @@ package {
                 if (!bmp || requested != currentApartmentId) return;
                 placeIntoBase(bmp);
             }, function(err:String):void {
-                trace("[PlanPopup] Ошибка загрузки плана: " + err);
+                trace("[PlanPopup] РћС€РёР±РєР° Р·Р°РіСЂСѓР·РєРё РїР»Р°РЅР°: " + err);
             });
         }
 
@@ -103,6 +105,9 @@ package {
         private function onRemoved(e:Event):void {
             cleanupListeners();
             clearBitmap();
+            if (previousInputMode != null) {
+                Multitouch.inputMode = previousInputMode;
+            }
         }
 
         private function cleanupListeners():void {
@@ -160,7 +165,7 @@ package {
 
         private function formatRooms(val:*):String {
             var n:int = int(val);
-            if (n <= 0) return "";
+            if (n <= 0) return "-";
             var suffix:String = "комнат";
             if (n == 1) suffix = "комната";
             else if (n >= 2 && n <= 4) suffix = "комнаты";
@@ -169,3 +174,6 @@ package {
         }
     }
 }
+
+
+

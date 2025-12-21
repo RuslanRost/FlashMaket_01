@@ -18,7 +18,7 @@
         private var pulseMinAlpha:Number = 0.5;
         private var pulseMaxAlpha:Number = 1.0;
         private var pulseSpeed:Number = 0.03;
-        private var esp:EspControl = new EspControl("http://192.168.1.100");
+        private var esp:EspControl = new EspControl(AppConfig.getEspUrl());
         private var led:LedController = new LedController(esp);
 
         

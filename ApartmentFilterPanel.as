@@ -21,7 +21,7 @@ package {
         private var _lastAppliedFrame:int = -1;
         private var _buttonsInited:Boolean = false;
         private var _applyTimeoutId:uint = 0;
-        private var _led:LedController = new LedController(new EspControl("http://192.168.1.100"));
+        private var _led:LedController = new LedController(new EspControl(AppConfig.getEspUrl()));
         private var _lightingAllowed:Boolean = false; // разрешать ли отправку подсветки
 
         public function ApartmentFilterPanel() {
