@@ -139,6 +139,8 @@
 
             var stageWidth:Number = stageRef.stageWidth;
             var stageHeight:Number = stageRef.stageHeight;
+            var padX:Number = stageWidth * 0.15;   // 15% поля по горизонтали
+            var padY:Number = stageHeight * 0.15;  // 15% поля по вертикали
 
             var bounds:Rectangle = container.getBounds(container);
 
@@ -156,13 +158,13 @@
             if (scaledWidth <= stageWidth) {
                 targetX = (stageWidth - scaledWidth) / 2 - bounds.x * scaleVal;
             } else {
-                targetX = Math.min(maxX, Math.max(minX, targetX));
+                targetX = Math.min(maxX + padX, Math.max(minX - padX, targetX));
             }
 
             if (scaledHeight <= stageHeight) {
                 targetY = (stageHeight - scaledHeight) / 2 - bounds.y * scaleVal;
             } else {
-                targetY = Math.min(maxY, Math.max(minY, targetY));
+                targetY = Math.min(maxY + padY, Math.max(minY - padY, targetY));
             }
         }
 

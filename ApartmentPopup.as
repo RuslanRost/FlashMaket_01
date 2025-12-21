@@ -15,6 +15,8 @@
     import flash.ui.MultitouchInputMode;
     import PhotoPopup;
     import PhotoPopup_01;
+    import PlanPopup;
+    import PlanPopup_01;
 
     public class ApartmentPopup extends MovieClip {
         public static const CLOSED:String = "ApartmentPopupClosed";
@@ -28,11 +30,13 @@
         public var brdr_Image:MovieClip;
         public var btn_ClosePopup:SimpleButton;
         public var btn_Photo:SimpleButton;
+        public var btn_Plan:SimpleButton;
 
         private var currentBitmap:Bitmap;
         private var currentApartmentNumber:String = "";
         private var darkBg:Sprite;
         private var photoPopup:PhotoPopup;
+        private var planPopup:PlanPopup;
         private var baseBitmapScaleX:Number = 1;
         private var baseBitmapScaleY:Number = 1;
         private var popupBaseScaleX:Number = 1;
@@ -73,6 +77,9 @@
             if (btn_Photo) {
                 btn_Photo.addEventListener(MouseEvent.CLICK, onPhotoClick);
             }
+            if (btn_Plan) {
+                btn_Plan.addEventListener(MouseEvent.CLICK, onPlanClick);
+            }
 
             configureTextFields();
             setupInteractionListeners();
@@ -108,6 +115,9 @@
             }
             if (btn_Photo) {
                 btn_Photo.removeEventListener(MouseEvent.CLICK, onPhotoClick);
+            }
+            if (btn_Plan) {
+                btn_Plan.removeEventListener(MouseEvent.CLICK, onPlanClick);
             }
         }
 
@@ -343,6 +353,22 @@
                 stage.addChild(photoPopup);
             }
             photoPopup.showForApartment(currentApartmentNumber);
+        }
+
+        private function onPlanClick(e:MouseEvent):void {
+            e.stopImmediatePropagation();
+            if (!stage) return;
+            if (!planPopup) {
+                try {
+                    planPopup = new PlanPopup_01();
+                } catch (err:Error) {
+                    planPopup = new PlanPopup();
+                }
+            }
+            if (!planPopup.stage) {
+                stage.addChild(planPopup);
+            }
+            planPopup.showForApartment(currentApartmentNumber);
         }
 
         private function getTypeDescription(type:String):String {

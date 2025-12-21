@@ -27,6 +27,7 @@ package {
         public var btn_next:SimpleButton;
         public var tfPhotoType:TextField;
         public var tfPhotoArea:TextField;
+        public var tfPhotoRooms:TextField;
         private var loadedBitmaps:Array = [];
         private var activeBitmaps:Array = [];
         private var activeIndex:int = 0;
@@ -59,6 +60,11 @@ package {
                 var sqText:String = Math.round(sqNum).toString() + " м²";
                 tfPhotoArea.text = sqText;
             }
+            var roomsVal:* = CRMData.getDataById(apartmentId, "rooms");
+            if (tfPhotoRooms) {
+                tfPhotoRooms.text = formatRooms(roomsVal);
+            }
+            trace("[PhotoPopup] rooms:", roomsVal);
 
             var raw:* = CRMData.getDataById(apartmentId, "render");
             var urls:Array = [];
@@ -278,6 +284,16 @@ package {
             if (highlight && highlight.parent) {
                 highlight.parent.removeChild(highlight);
             }
+        }
+
+        private function formatRooms(val:*):String {
+            var n:int = int(val);
+            if (n <= 0) return "";
+            var suffix:String = "комнат";
+            if (n == 1) suffix = "комната";
+            else if (n >= 2 && n <= 4) suffix = "комнаты";
+            else suffix = "комнат";
+            return n.toString() + " " + suffix;
         }
     }
 }

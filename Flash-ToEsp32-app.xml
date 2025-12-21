@@ -18,7 +18,7 @@
 -->
 <application xmlns="http://ns.adobe.com/air/application/33.1">
   <id>Flash-ToEsp32</id>
-  <versionNumber>2.0</versionNumber>
+  <versionNumber>2.1</versionNumber>
   
   <filename>Flash-ToEsp32</filename>
   <description/>

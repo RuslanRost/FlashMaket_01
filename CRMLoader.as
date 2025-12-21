@@ -123,6 +123,15 @@
                 if (apt.hasOwnProperty("area") && apt.area !== null && apt.area !== undefined) {
                     updated.square = apt.area;
                 }
+                if (apt.hasOwnProperty("area_living") && apt.area_living !== null && apt.area_living !== undefined) {
+                    updated.area_living = apt.area_living;
+                }
+                if (apt.hasOwnProperty("area_balcony") && apt.area_balcony !== null && apt.area_balcony !== undefined) {
+                    updated.area_balcony = apt.area_balcony;
+                }
+                if (apt.hasOwnProperty("rooms") && apt.rooms !== null && apt.rooms !== undefined) {
+                    updated.rooms = apt.rooms;
+                }
 
                 if (apt.hasOwnProperty("type") && apt.type != null && String(apt.type) != "") {
                     updated.type = apt.type;
