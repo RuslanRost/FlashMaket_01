@@ -156,14 +156,20 @@
                 }
             }
 
+                        // Формируем batch: rooms_on + rooms_off (только текущий этаж)
+            var commands:Array = [];
             if (ids.length > 0) {
-                esp.turnOnRoomsBatch(ids, "instant", null, null, false, false);
+                var cmdOn:Object = esp.buildRoomsOnCommand(ids, "instant");
+                if (cmdOn) commands.push(cmdOn);
             }
-
             if (invisible.length > 0) {
-                esp.turnOffRoomsBatch(invisible, "instant", null, null, false, false);
+                var cmdOff:Object = esp.buildRoomsOffCommand(invisible, "instant");
+                if (cmdOff) commands.push(cmdOff);
             }
-        }
+            if (commands.length > 0) {
+                esp.sendBatch(commands, null, null, false, false);
+            }
+}
 
         private function extractFloorNumber(apartmentId:String):int {
             if (!apartmentId || apartmentId.length == 0) return -1;

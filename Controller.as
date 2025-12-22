@@ -1,4 +1,4 @@
-п»їpackage {
+package {
     import flash.display.MovieClip;
     import flash.display.Shape;
     import flash.display.Stage;
@@ -33,19 +33,19 @@
         private var draggingMouse:Boolean = false;
         private var lastMousePos:Point = null;
 
-        private var debug:Boolean = true; // РІРєР»СЋС‡Рё true РґР»СЏ Р»РѕРіРѕРІ
+        private var debug:Boolean = false; // включи true для логов
 
         private var _fixedMouseX:Number = 0;
         private var _fixedMouseY:Number = 0;
 
-        // Р”Р»СЏ РєРѕРЅС‚СЂРѕР»СЏ РЅР°С‡Р°Р»Р° РґСЂР°РіРіРёРЅРіР° СЃ РїРѕСЂРѕРіРѕРј
+        // Для контроля начала драггинга с порогом
         private var isMouseDown:Boolean = false;
         private var mouseDownPos:Point = null;
         private var isDraggingStarted:Boolean = false;
         private var isMouseDownOnContainer:Boolean = false;
 
 
-        private const DRAG_THRESHOLD:Number = 5; // РїРёРєСЃРµР»РµР№
+        private const DRAG_THRESHOLD:Number = 5; // пикселей
 
         public function Controller(container:MovieClip, stageRef:Stage) {
             this.container = container;
@@ -120,7 +120,6 @@
                     targetX += dx;
                     targetY += dy;
                     lastMousePos = currentPos;
-                    if (debug) trace("[Controller] dragging dx,dy", dx, dy, "targetX,targetY", targetX, targetY);
                 }
             }
 
@@ -139,8 +138,8 @@
 
             var stageWidth:Number = stageRef.stageWidth;
             var stageHeight:Number = stageRef.stageHeight;
-            var padX:Number = stageWidth * 0.15;   // 15% РїРѕР»СЏ РїРѕ РіРѕСЂРёР·РѕРЅС‚Р°Р»Рё
-            var padY:Number = stageHeight * 0.15;  // 15% РїРѕР»СЏ РїРѕ РІРµСЂС‚РёРєР°Р»Рё
+            var padX:Number = stageWidth * 0.15;   // 15% поля по горизонтали
+            var padY:Number = stageHeight * 0.15;  // 15% поля по вертикали
 
             var bounds:Rectangle = container.getBounds(container);
 
@@ -168,7 +167,7 @@
             }
         }
 
-        // Touch handlers Р±РµР· РёР·РјРµРЅРµРЅРёР№
+        // Touch handlers без изменений
         private function onTouchBegin(e:TouchEvent):void {
             if (isPopupActive()) return;
             activeTouches[e.touchPointID] = new Point(e.stageX, e.stageY);
@@ -195,16 +194,16 @@
                     var newScale:Number = targetScale * scaleRatio;
                     newScale = Math.max(minScale, Math.min(maxScale, newScale));
 
-                    // 1. Р¦РµРЅС‚СЂ РјРµР¶РґСѓ РїР°Р»СЊС†Р°РјРё РІ global
+                    // 1. Центр между пальцами в global
                     var globalCenter:Point = currentCenter.clone();
 
-                    // 2. Р­С‚Р° Р¶Рµ С‚РѕС‡РєР° РІ local РєРѕРЅС‚РµР№РЅРµСЂР° Р”Рћ РјР°СЃС€С‚Р°Р±Р°
+                    // 2. Эта же точка в local контейнера ДО масштаба
                     var localBefore:Point = container.globalToLocal(globalCenter);
 
-                    // 3. РћР±РЅРѕРІР»СЏРµРј С†РµР»РµРІРѕР№ РјР°СЃС€С‚Р°Р±
+                    // 3. Обновляем целевой масштаб
                     targetScale = newScale;
 
-                    // 4. РџРµСЂРµСЃС‡РёС‚С‹РІР°РµРј РїРѕР·РёС†РёСЋ С‚Р°Рє, С‡С‚РѕР±С‹ globalCenter РѕСЃС‚Р°Р»СЃСЏ РЅР° РјРµСЃС‚Рµ
+                    // 4. Пересчитываем позицию так, чтобы globalCenter остался на месте
                     targetX = globalCenter.x - localBefore.x * targetScale;
                     targetY = globalCenter.y - localBefore.y * targetScale;
 
@@ -238,27 +237,25 @@
             return arr;
         }
 
-        // Mouse handlers СЃ РїРѕСЂРѕРіРѕРј Рё РїСЂРѕРІРµСЂРєРѕР№ РїРѕ РєРѕРЅС‚РµР№РЅРµСЂСѓ
+        // Mouse handlers с порогом и проверкой по контейнеру
         private function onMouseDownCapture(e:MouseEvent):void {
             var pt:Point = new Point(e.stageX, e.stageY);
             var objectsUnderPoint:Array = stageRef.getObjectsUnderPoint(pt);
 
-            // РџСЂРѕРІРµСЂРёРј РєР°Р¶РґС‹Р№ РѕР±СЉРµРєС‚, РµСЃС‚СЊ Р»Рё С‚РѕС‚, С‡С‚Рѕ РЅРµ container Рё РЅРµ РїРѕС‚РѕРјРѕРє container
+            // Проверим каждый объект, есть ли тот, что не container и не потомок container
             for each (var obj:DisplayObject in objectsUnderPoint) {
-                // Р•СЃР»Рё СЌС‚Рѕ РЅРµ РєРѕРЅС‚РµР№РЅРµСЂ Рё РЅРµ РµРіРѕ РїРѕС‚РѕРјРѕРє
+                // Если это не контейнер и не его потомок
                 if (obj != container && !isDescendantOf(obj, container)) {
-                    if (debug) trace("[Controller] Click on other element, ignoring drag");
-                    return; // РРіРЅРѕСЂРёСЂСѓРµРј drag
+                    return; // Игнорируем drag
                 }
             }
 
-            // Р•СЃР»Рё РґРѕС€Р»Рё СЃСЋРґР° вЂ” Р·РЅР°С‡РёС‚ РєР»РёРє РёРјРµРЅРЅРѕ РїРѕ РєРѕРЅС‚РµР№РЅРµСЂСѓ РёР»Рё РµРіРѕ РїРѕС‚РѕРјРєР°Рј
+            // Если дошли сюда — значит клик именно по контейнеру или его потомкам
             isMouseDownOnContainer = true;
             isMouseDown = true;
             mouseDownPos = new Point(e.stageX, e.stageY);
             isDraggingStarted = false;
 
-            if (debug) trace("[Controller] Mouse down on container");
         }
 
         private function isDescendantOf(child:DisplayObject, parent:DisplayObjectContainer):Boolean {
@@ -288,16 +285,15 @@
                     lastMousePos = new Point(_fixedMouseX, _fixedMouseY);
                     createDragLayer();
 
-                    if (debug) trace("[Controller] Drag started after threshold");
                 }
             }
-            // else вЂ” РґСЂР°Рі СѓР¶Рµ РёРґРµС‚, РѕР±РЅРѕРІР»РµРЅРёРµ lastMousePos РІ onUpdate
+            // else — драг уже идет, обновление lastMousePos в onUpdate
         }
 
         private function createDragLayer():void {
             if (!dragLayer) {
                 dragLayer = new Sprite();
-                dragLayer.graphics.beginFill(0x000000, 0); // РїСЂРѕР·СЂР°С‡РЅС‹Р№
+                dragLayer.graphics.beginFill(0x000000, 0); // прозрачный
                 dragLayer.graphics.drawRect(0, 0, stageRef.stageWidth, stageRef.stageHeight);
                 dragLayer.graphics.endFill();
                 dragLayer.mouseEnabled = true;
@@ -320,7 +316,6 @@
             draggingMouse = false;
             lastMousePos = null;
 
-            if (debug) trace("[Controller] Mouse up - drag ended or cancelled");
         }
 
 

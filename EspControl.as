@@ -93,6 +93,22 @@
             }, debounceDelay);
         }
 
+        //-----------------------------
+        // Batch sender
+        //-----------------------------
+        public function sendBatch(commands:Array,
+                                  onComplete:Function = null,
+                                  onError:Function = null,
+                                  preTurnOff:Boolean = false,
+                                  skipDebounce:Boolean = false):void {
+            if (!commands || commands.length == 0) {
+                log("batch: empty commands");
+                return;
+            }
+            var payload:Object = { cmd: "batch", commands: commands };
+            sendJson(payload, onComplete, onError, preTurnOff, skipDebounce);
+        }
+
         private function sendJsonNow(data:Object,
                                      onComplete:Function = null,
                                      onError:Function = null,
@@ -294,9 +310,35 @@
                                          onError:Function=null,
                                          preTurnOff:Boolean=true,
                                          skipDebounce:Boolean=false):void {
+            var payload:Object = buildRoomsOnCommand(apartmentIds, effect);
+            if (!payload) return;
+            log("Turn ON rooms batch");
+            sendJson(payload, onComplete, onError, preTurnOff, skipDebounce);
+        }
+
+        //-----------------------------
+        // Turn OFF multiple rooms in one JSON (batch structure)
+        //-----------------------------
+        public function turnOffRoomsBatch(apartmentIds:Array,
+                                          effect:String="instant",
+                                          onComplete:Function=null,
+                                          onError:Function=null,
+                                          preTurnOff:Boolean=false,
+                                          skipDebounce:Boolean=false):void {
+            var payload:Object = buildRoomsOffCommand(apartmentIds, effect);
+            if (!payload) return;
+            log("Turn OFF rooms batch");
+            // Явно отключаем предварительный all_off, т.к. сами управляем списками
+            sendJson(payload, onComplete, onError, preTurnOff, skipDebounce);
+        }
+
+        //-----------------------------
+        // Helpers to build rooms_on / rooms_off payloads
+        //-----------------------------
+        public function buildRoomsOnCommand(apartmentIds:Array, effect:String="instant"):Object {
             if (!apartmentIds || apartmentIds.length == 0) {
-                log("turnOnRoomsBatch: empty apartmentIds");
-                return;
+                log("buildRoomsOnCommand: empty apartmentIds");
+                return null;
             }
 
             var rooms:Array = [];
@@ -313,42 +355,26 @@
                 });
             }
 
-            var payload:Object = {
+            return {
                 cmd: "rooms_on",
                 rooms: rooms
             };
-
-            log("Turn ON rooms batch");
-            sendJson(payload, onComplete, onError, preTurnOff, skipDebounce);
         }
 
-        //-----------------------------
-        // Turn OFF multiple rooms in one JSON (batch structure)
-        //-----------------------------
-        public function turnOffRoomsBatch(apartmentIds:Array,
-                                          effect:String="instant",
-                                          onComplete:Function=null,
-                                          onError:Function=null,
-                                          preTurnOff:Boolean=false,
-                                          skipDebounce:Boolean=false):void {
+        public function buildRoomsOffCommand(apartmentIds:Array, effect:String="instant"):Object {
             if (!apartmentIds || apartmentIds.length == 0) {
-                log("turnOffRoomsBatch: empty apartmentIds");
-                return;
+                log("buildRoomsOffCommand: empty apartmentIds");
+                return null;
             }
-
-            var payload:Object = {
+            var rooms:Array = [];
+            for each (var aptId:String in apartmentIds) {
+                rooms.push(int(aptId));
+            }
+            return {
                 cmd: "rooms_off",
                 effect: effect,
-                rooms: []
+                rooms: rooms
             };
-
-            for each (var aptId:String in apartmentIds) {
-                payload.rooms.push(int(aptId));
-            }
-
-            log("Turn OFF rooms batch");
-            // Явно отключаем предварительный all_off, т.к. сами управляем списками
-            sendJson(payload, onComplete, onError, preTurnOff, skipDebounce);
         }
 
         //-----------------------------
