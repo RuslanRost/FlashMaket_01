@@ -1,4 +1,4 @@
-п»їpackage {
+package {
     import flash.display.Sprite;
     import flash.text.TextField;
     import flash.text.TextFormat;
@@ -27,7 +27,7 @@
         private var labelField:TextField;
         private var labelBg:Sprite;
 
-        private var polyPoints:Array = null; // РєРѕРѕСЂРґРёРЅР°С‚С‹ РјРЅРѕРіРѕСѓРіРѕР»СЊРЅРёРєР°
+        private var polyPoints:Array = null; // координаты многоугольника
         private var lastSelectedFloor:int = -1;
 
         public function ApartmentButtonNew() {
@@ -44,52 +44,50 @@
             labelField.selectable = false;
             labelBg.addChild(labelField);
 
-            // РћС‚РєР»СЋС‡Р°РµРј hitTest РґР»СЏ С„РѕСЂРјС‹ Рё label, С‡С‚РѕР±С‹ РЅРµ Р±Р»РѕРєРёСЂРѕРІР°С‚СЊ РґРІРёР¶РµРЅРёРµ РєР°СЂС‚С‹
+            // Отключаем hitTest для формы и label, чтобы не блокировать движение карты
             polygonShape.mouseEnabled = false;
             polygonShape.mouseChildren = false;
             labelBg.mouseEnabled = false;
             labelBg.mouseChildren = false;
 
-            // РљР»РёРєР°РµС‚СЃСЏ С‚РѕР»СЊРєРѕ СЃР°Рј РєРѕРЅС‚РµР№РЅРµСЂ-РєРЅРѕРїРєР°
+            // Кликается только сам контейнер-кнопка
             this.mouseChildren = true;
             this.mouseEnabled = true;
 
-            trace("[ApartmentButtonNew] apartmentNumber СѓСЃС‚Р°РЅРѕРІР»РµРЅ РёР· РёРјРµРЅРё: " + apartmentNumber);
 
-            // РЈСЃС‚Р°РЅР°РІР»РёРІР°РµРј С†РІРµС‚ СЃС‚Р°С‚СѓСЃР° (РІС‹РґРµР»РµРЅРѕ РІ РѕС‚РґРµР»СЊРЅСѓСЋ С„СѓРЅРєС†РёСЋ)
+            // Устанавливаем цвет статуса (выделено в отдельную функцию)
             setColorByStatus();
 
-            // РћРґРёРЅ-РµРґРёРЅСЃС‚РІРµРЅРЅС‹Р№ РѕР±СЂР°Р±РѕС‚С‡РёРє РєР»РёРєР°
+            // Один-единственный обработчик клика
             this.addEventListener(MouseEvent.CLICK, onClickWrapper);
         }
 
-        // РќРѕРІР°СЏ С„СѓРЅРєС†РёСЏ РґР»СЏ СѓСЃС‚Р°РЅРѕРІРєРё С†РІРµС‚Р° РїРѕ СЃС‚Р°С‚СѓСЃСѓ РёР· CRMData
+        // Новая функция для установки цвета по статусу из CRMData
         public function setColorByStatus():void {
             try {
                 var status:String = CRMData.getDataById(apartmentNumber, "status");
-                trace("[ApartmentButtonNew] РЎС‚Р°С‚СѓСЃ РґР»СЏ " + apartmentNumber + ": " + status);
                 if (status) {
                     var ct:ColorTransform = new ColorTransform();
 
                     switch(status) {
                         case "Available":
-                            ct.color = 0x00CC00; // Р·РµР»РµРЅС‹Р№
+                            ct.color = 0x00CC00; // зеленый
                             break;
 
                         case "Reserved":
-                            ct.color = 0xFFCC00; // Р¶РµР»С‚С‹Р№
+                            ct.color = 0xFFCC00; // желтый
                             break;
 
                         case "Occupied":
-                            ct.color = 0xCC0000; // РєСЂР°СЃРЅС‹Р№
+                            ct.color = 0xCC0000; // красный
                             break;
 
-                        case "РЎlosed for sale":
-                            ct.color = 0x999999; // СЃРµСЂС‹Р№
+                        case "Сlosed for sale":
+                            ct.color = 0x999999; // серый
                             break;
 
                         default:
-                            ct.color = 0x999999; // РЅР° РІСЃСЏРєРёР№ СЃР»СѓС‡Р°Р№
+                            ct.color = 0x999999; // на всякий случай
                             break;
                     }
 
@@ -97,7 +95,6 @@
                 }
 
             } catch (e:Error) {
-                trace("[ApartmentButtonNew] РћС€РёР±РєР° РїСЂРё РїРѕР»СѓС‡РµРЅРёРё СЃС‚Р°С‚СѓСЃР°: " + e.message);
             }
         }
 
@@ -131,16 +128,16 @@
 
             labelField.text = apartmentNumber;
 
-            // Р§С‘СЂРЅС‹Р№ С‚РµРєСЃС‚
+            // Чёрный текст
             var fmt:TextFormat = new TextFormat("Arial", 10, 0x000000, true);
             labelField.setTextFormat(fmt);
             labelField.defaultTextFormat = fmt;
             labelField.width = labelField.textWidth + 10;
             labelField.height = labelField.textHeight + 4;
 
-            // Р‘РµР»С‹Р№ С„РѕРЅ РїРѕРґ С‚РµРєСЃС‚РѕРј
+            // Белый фон под текстом
             labelBg.graphics.clear();
-            labelBg.graphics.beginFill(0xFFFFFF, 1); // Р±РµР»С‹Р№, РЅРµРїСЂРѕР·СЂР°С‡РЅС‹Р№
+            labelBg.graphics.beginFill(0xFFFFFF, 1); // белый, непрозрачный
             labelBg.graphics.drawRect(0, 0, labelField.width, labelField.height);
             labelBg.graphics.endFill();
 
@@ -151,7 +148,7 @@
         }
 
         // --------------------------------------------------------------------
-        // РџСЂРѕРІРµСЂРєР° РїРѕРїР°РґР°РЅРёСЏ РєСѓСЂСЃРѕСЂР° РІРЅСѓС‚СЂСЊ РјРЅРѕРіРѕСѓРіРѕР»СЊРЅРёРєР°
+        // Проверка попадания курсора внутрь многоугольника
         // --------------------------------------------------------------------
 
         private function onClickWrapper(e:MouseEvent):void {
@@ -186,15 +183,14 @@
         }
 
         // --------------------------------------------------------------------
-        // РўРІРѕР№ РѕСЂРёРіРёРЅР°Р»СЊРЅС‹Р№ РѕР±СЂР°Р±РѕС‚С‡РёРє РєР»РёРєР°
+        // Твой оригинальный обработчик клика
         // --------------------------------------------------------------------
 
         private function onRealClick():void {
-            trace("[ApartmentButtonNew] РљР»РёРє РїРѕ РєРІР°СЂС‚РёСЂРµ: " + apartmentNumber);
 
             if (!apartmentNumber) return;
 
-            // РќР°Р№РґРµРј СЃСѓС‰РµСЃС‚РІСѓСЋС‰РёР№ ApartmentPopup РЅР° СЃС†РµРЅРµ (РµСЃР»Рё РµСЃС‚СЊ)
+            // Найдем существующий ApartmentPopup на сцене (если есть)
             var popup:ApartmentPopup = null;
             if (stage) {
                 for (var i:int = 0; i < stage.numChildren; i++) {
@@ -211,12 +207,11 @@
 
             this.startPulse();
             GlobalData.activeButton = this;
-            GlobalData.activeButtonName = apartmentNumber;  // <-- РЎРѕС…СЂР°РЅСЏРµРј РёРјСЏ РєРЅРѕРїРєРё РѕС‚РґРµР»СЊРЅРѕ!
+            GlobalData.activeButtonName = apartmentNumber;  // <-- Сохраняем имя кнопки отдельно!
 
             led.lightUpRoomByStatus(apartmentNumber);
             lastSelectedFloor = extractFloorNumber(apartmentNumber);
 
-            trace(GlobalData.activeButtonName);
 
             if (popup) {
                 ensurePopupListener(popup);
@@ -235,7 +230,6 @@
                     ensurePopupListener(popup);
                     popup.showApartmentInfo(apartmentNumber);
                 } else {
-                    trace("[ApartmentButtonNew] РћС€РёР±РєР°: stage РѕС‚СЃСѓС‚СЃС‚РІСѓРµС‚");
                 }
             }
         }
@@ -287,7 +281,7 @@
 
         private function extractFloorNumber(apartmentId:String):int {
             if (!apartmentId || apartmentId.length == 0) return -1;
-            // Р’ ID РєРІР°СЂС‚РёСЂС‹ РїРµСЂРІС‹Рј СЃРёРјРІРѕР»РѕРј РёРґС‘С‚ СЌС‚Р°Р¶ (Сѓ РЅР°СЃ СЌС‚Р°Р¶Рё 2-8), РѕСЃС‚Р°Р»СЊРЅРѕРµ вЂ” РЅРѕРјРµСЂ
+            // В ID квартиры первым символом идёт этаж (у нас этажи 2-8), остальное — номер
             var firstChar:String = apartmentId.charAt(0);
             var n:int = parseInt(firstChar);
             if (isNaN(n)) {

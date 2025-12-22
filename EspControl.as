@@ -13,7 +13,7 @@
 
         private var deviceIP:String;
         // Простая "анти-дребезг" отправки: если быстро приходят команды, ждём и шлём по одной на тип.
-        private var debounceDelay:int = 800; // мс — увеличенная задержка для группировки
+        private var debounceDelay:int = 300; // мс — задержка для группировки команд
         private var debounceTimer:uint = 0;
         private var pendingQueue:Array = []; // элементы: {data,onComplete,onError,preTurnOff}
 
