@@ -1,4 +1,4 @@
-package {
+﻿package {
     import flash.display.MovieClip;
     import flash.events.Event;
     import flash.utils.setTimeout;
@@ -43,8 +43,7 @@ package {
             TglBtn_Available = this.getChildByName("TglBtn_Available") as ToggleButton;
 
             if (!TglBtn_Occupied || !TglBtn_Reserved || !TglBtn_Available) {
-                trace("[ApartmentFilterPanel] ? ToggleButton отсутствуют.");
-                return;
+return;
             }
 
             // Восстановление сохранённого состояния
@@ -90,9 +89,7 @@ package {
         }
 
         private function onFilterChanged(e:Event):void {
-            trace("[ApartmentFilterPanel] onFilterChanged triggered");
-
-            // Сохраняем состояние toggle кнопок
+// Сохраняем состояние toggle кнопок
             savedFilterState.occupied  = TglBtn_Occupied.state;
             savedFilterState.reserved  = TglBtn_Reserved.state;
             savedFilterState.available = TglBtn_Available.state;
@@ -136,21 +133,12 @@ package {
         private function applyApartmentFiltersInternal():void {
             _applyTimeoutId = 0;
             if (!stage) {
-                trace("[ApartmentFilterPanel] applyApartmentFilters: stage отсутствует, выходим");
                 return;
             }
 
             var filters:Object = getFilterState();
-            trace("[ApartmentFilterPanel] applyApartmentFilters (без слайдера площади)");
-            trace("[ApartmentFilterPanel] toggle states -> occupied:" + filters.occupied +
-                  " reserved:" + filters.reserved + " available:" + filters.available);
-
             var buttons:Array = GlobalData.apartmentButtons;
-
-            if (!buttons) {
-                trace("[ApartmentFilterPanel] Нет GlobalData.apartmentButtons для фильтрации");
-                return;
-            }
+            if (!buttons) return;
 
             // Готовим внешние фильтры с дропдаунов
             var allowedStatuses:Array = null;
@@ -189,11 +177,6 @@ package {
                 }
             }
 
-            trace("[ApartmentFilterPanel] dropdown statuses: " + (_dropdownFilters && _dropdownFilters.status ? _dropdownFilters.status : "none") +
-                  " | allowedStatuses after merge: " + (allowedStatuses ? allowedStatuses : "none"));
-            trace("[ApartmentFilterPanel] dropdown types: " + (_dropdownFilters && _dropdownFilters.type ? _dropdownFilters.type : "none"));
-            trace("[ApartmentFilterPanel] dropdown square: " + (_dropdownFilters && _dropdownFilters.square ? _dropdownFilters.square : "none"));
-
             for each (var button:ApartmentButtonNew in buttons) {
                 if (!button) {
                     continue;
@@ -207,7 +190,6 @@ package {
 
                     if (!status || area == null) {
                         button.visible = false;
-                        trace("[ApartmentFilterPanel] Квартира " + aptNum + " скрыта - нет данных");
                         continue;
                     }
 
@@ -251,14 +233,8 @@ package {
                             GlobalData.activeButton = null;
                         }
                     }
-
-                    trace("[ApartmentFilterPanel] Квартира " + aptNum +
-                          " | статус: " + status +
-                          " | тип: " + aptType +
-                          " | площадь: " + areaNum.toFixed(2) +
-                          " | visible: " + show);
                 } catch (err:Error) {
-                    trace("[ApartmentFilterPanel] ! Ошибка при обработке кнопки: " + err.message + "\n" + err.getStackTrace());
+                    // игнорируем ошибки отдельной кнопки, продолжаем остальные
                 }
             }
 

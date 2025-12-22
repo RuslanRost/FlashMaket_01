@@ -6,13 +6,16 @@
     import flash.events.Event;
     import flash.events.IOErrorEvent;
     import flash.events.SecurityErrorEvent;
-    import flash.filesystem.File;
-    import flash.filesystem.FileMode;
-    import flash.filesystem.FileStream;
+    import flash.utils.setTimeout;
+    import flash.utils.clearTimeout;
 
     public class EspControl {
 
         private var deviceIP:String;
+        // Простая "анти-дребезг" отправки: если быстро приходят команды, ждём и шлём по одной на тип.
+        private var debounceDelay:int = 800; // мс — увеличенная задержка для группировки
+        private var debounceTimer:uint = 0;
+        private var pendingQueue:Array = []; // элементы: {data,onComplete,onError,preTurnOff}
 
         public function EspControl(deviceIP:String) {
             this.deviceIP = deviceIP;
@@ -23,24 +26,13 @@
         // Logging helper
         //-----------------------------
         private function log(msg:String):void {
-            trace("[ESP] " + msg);
-        }
-
-        //-----------------------------
-        // Save JSON for debugging
-        //-----------------------------
-        private function saveJsonToFile(jsonString:String, fileName:String = "esp_debug.json"):void {
-            try {
-                var file:File = File.documentsDirectory.resolvePath(fileName);
-                var stream:FileStream = new FileStream();
-                stream.open(file, FileMode.WRITE);
-                stream.writeUTFBytes(jsonString);
-                stream.close();
-
-                log("JSON saved to file: " + file.nativePath);
-            } catch (error:Error) {
-                log("ERROR saving JSON: " + error.message);
-            }
+            var now:Date = new Date();
+            var hh:String = (now.hours < 10 ? "0" : "") + now.hours;
+            var mm:String = (now.minutes < 10 ? "0" : "") + now.minutes;
+            var ss:String = (now.seconds < 10 ? "0" : "") + now.seconds;
+            var ms:String = now.milliseconds.toString();
+            while (ms.length < 3) ms = "0" + ms;
+            trace("[" + hh + ":" + mm + ":" + ss + "." + ms + "][ESP] " + msg);
         }
 
         //-----------------------------
@@ -49,7 +41,62 @@
         public function sendJson(data:Object,
                                  onComplete:Function = null,
                                  onError:Function = null,
-                                 preTurnOff:Boolean = true):void {
+                                 preTurnOff:Boolean = true,
+                                 skipDebounce:Boolean = false):void {
+            if (skipDebounce) {
+                sendJsonNow(data, onComplete, onError, preTurnOff);
+                return;
+            }
+
+            var cmdKey:String = data && data.hasOwnProperty("cmd") ? String(data["cmd"]) : "";
+
+            // Если приходит обычная команда — очищаем очередь, чтобы ушла только она.
+            // Для rooms_on/rooms_off оставляем оба, но сбрасываем остальные.
+            if (cmdKey == "rooms_on" || cmdKey == "rooms_off") {
+                var filtered:Array = [];
+                for each (var keep:Object in pendingQueue) {
+                    if (keep && keep.data && (keep.data.cmd == "rooms_on" || keep.data.cmd == "rooms_off")) {
+                        filtered.push(keep);
+                    }
+                }
+                pendingQueue = filtered;
+            } else {
+                pendingQueue = [];
+            }
+
+            // Накапливаем последнюю команду каждого типа (cmd) и ждём debounceDelay
+            var replaced:Boolean = false;
+            for (var i:int = 0; i < pendingQueue.length; i++) {
+                var item:Object = pendingQueue[i];
+                if (item && item.data && item.data.cmd == cmdKey) {
+                    pendingQueue[i] = { data: data, onComplete: onComplete, onError: onError, preTurnOff: preTurnOff };
+                    replaced = true;
+                    break;
+                }
+            }
+            if (!replaced) {
+                pendingQueue.push({ data: data, onComplete: onComplete, onError: onError, preTurnOff: preTurnOff });
+            }
+
+            if (debounceTimer != 0) {
+                clearTimeout(debounceTimer);
+            }
+            debounceTimer = setTimeout(function():void {
+                debounceTimer = 0;
+                // Отправляем накопленные команды по порядку добавления/замены
+                for each (var entry:Object in pendingQueue) {
+                    if (entry && entry.data) {
+                        sendJsonNow(entry.data, entry.onComplete, entry.onError, entry.preTurnOff);
+                    }
+                }
+                pendingQueue = [];
+            }, debounceDelay);
+        }
+
+        private function sendJsonNow(data:Object,
+                                     onComplete:Function = null,
+                                     onError:Function = null,
+                                     preTurnOff:Boolean = true):void {
             if (preTurnOff) {
                 // Сначала ждём ответа от all_off, затем отправляем основную команду
                 sendJsonInternal(
@@ -74,11 +121,11 @@
             var jsonString:String = JSON.stringify(data);
             var url:String = deviceIP + "/";
 
-            log("------------------------------");
-            log("Sending POST -> " + url);
-            log("Payload: " + jsonString);
-
-            saveJsonToFile(jsonString);
+            var cmdLabel:String = "";
+            if (data && data.hasOwnProperty("cmd")) {
+                cmdLabel = String(data["cmd"]);
+            }
+            log("Sending request, cmd=" + cmdLabel);
 
             var request:URLRequest = new URLRequest(url);
             request.method = URLRequestMethod.POST;
@@ -88,7 +135,7 @@
             var loader:URLLoader = new URLLoader();
 
             loader.addEventListener(Event.COMPLETE, function(e:Event):void {
-                log("Response received: " + loader.data);
+                log("Response received");
                 if(onComplete != null) onComplete(loader.data);
             });
 
@@ -154,7 +201,7 @@
             var status:String = CRMData.getDataById(apartmentId, "status");
             var brightness:int = getBrightness(apartmentId);
 
-            log("Turn ON apartment " + apartmentId + " -> LedID: " + ledId + ", status: " + status + ", brightness: " + brightness + ", effect: " + effect);
+            log("Turn ON apartment");
 
             if (!ledId) {
                 log("ERROR: LedID not found for " + apartmentId);
@@ -169,7 +216,8 @@
                 effect: effect
             };
 
-            sendJson(payload, onComplete, onError);
+            // Для одиночной квартиры не отправляем предварительный all_off
+            sendJson(payload, onComplete, onError, false);
         }
 
         //-----------------------------
@@ -192,7 +240,7 @@
             if (appliedBrightness < 0) appliedBrightness = 0;
             if (appliedBrightness > 255) appliedBrightness = 255;
 
-            log("Turn ON apartment custom color " + apartmentId + " -> LedID: " + ledId + ", brightness: " + appliedBrightness + ", effect: " + effect);
+            log("Turn ON apartment custom color");
 
             if (!ledId) {
                 log("ERROR: LedID not found for " + apartmentId);
@@ -207,7 +255,8 @@
                 effect: effect
             };
 
-            sendJson(payload, onComplete, onError);
+            // Для одиночной квартиры не отправляем предварительный all_off
+            sendJson(payload, onComplete, onError, false);
         }
 
         //-----------------------------
@@ -223,7 +272,7 @@
             if (color == null) color = [255, 255, 255];
             if (brightness < 0 || brightness > 255) brightness = 255;
 
-            log("Turn ON floor via floor_on -> floor:" + floor + ", color:" + color + ", brightness:" + brightness + ", effect:" + effect);
+            log("Turn ON floor via floor_on");
 
             var payload:Object = {
                 cmd: "floor_on",
@@ -233,7 +282,6 @@
                 effect: effect
             };
 
-            log("floorOn payload -> cmd=" + payload.cmd + ", floor=" + floor + ", color=" + color + ", brightness=" + brightness + ", effect=" + effect);
             sendJson(payload, onComplete, onError);
         }
 
@@ -244,7 +292,8 @@
                                          effect:String="instant",
                                          onComplete:Function=null,
                                          onError:Function=null,
-                                         preTurnOff:Boolean=true):void {
+                                         preTurnOff:Boolean=true,
+                                         skipDebounce:Boolean=false):void {
             if (!apartmentIds || apartmentIds.length == 0) {
                 log("turnOnRoomsBatch: empty apartmentIds");
                 return;
@@ -269,8 +318,8 @@
                 rooms: rooms
             };
 
-            log("Turn ON rooms batch: " + apartmentIds.join(","));
-            sendJson(payload, onComplete, onError, preTurnOff);
+            log("Turn ON rooms batch");
+            sendJson(payload, onComplete, onError, preTurnOff, skipDebounce);
         }
 
         //-----------------------------
@@ -280,7 +329,8 @@
                                           effect:String="instant",
                                           onComplete:Function=null,
                                           onError:Function=null,
-                                          preTurnOff:Boolean=false):void {
+                                          preTurnOff:Boolean=false,
+                                          skipDebounce:Boolean=false):void {
             if (!apartmentIds || apartmentIds.length == 0) {
                 log("turnOffRoomsBatch: empty apartmentIds");
                 return;
@@ -296,9 +346,9 @@
                 payload.rooms.push(int(aptId));
             }
 
-            log("Turn OFF rooms batch: " + apartmentIds.join(","));
+            log("Turn OFF rooms batch");
             // Явно отключаем предварительный all_off, т.к. сами управляем списками
-            sendJson(payload, onComplete, onError, preTurnOff);
+            sendJson(payload, onComplete, onError, preTurnOff, skipDebounce);
         }
 
         //-----------------------------
@@ -310,7 +360,7 @@
                                   onComplete:Function=null,
                                   onError:Function=null):void {
 
-            log("Turn ON ALL LEDs, color=" + color);
+            log("Turn ON ALL LEDs");
 
             var payload:Object = {
                 cmd: "all_on",
@@ -329,7 +379,7 @@
                                    onComplete:Function=null,
                                    onError:Function=null):void {
 
-            log("Turn OFF ALL LEDs, effect=" + effect);
+            log("Turn OFF ALL LEDs");
 
             var payload:Object = {
                 cmd: "all_off",
