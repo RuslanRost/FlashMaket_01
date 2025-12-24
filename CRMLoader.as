@@ -137,7 +137,10 @@
                     updated.type = apt.type;
                 }
 
-                if (apt.hasOwnProperty("plan_image") && apt.plan_image != null && String(apt.plan_image) != "") {
+                if (apt.hasOwnProperty("plan") && apt.plan != null && String(apt.plan) != "") {
+                    updated.plan = apt.plan;
+                    addImageUrl(String(apt.plan));
+                } else if (apt.hasOwnProperty("plan_image") && apt.plan_image != null && String(apt.plan_image) != "") {
                     updated.plan = apt.plan_image;
                     addImageUrl(String(apt.plan_image));
                 }
