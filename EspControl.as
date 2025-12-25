@@ -13,13 +13,29 @@
 
         private var deviceIP:String;
         // Простая "анти-дребезг" отправки: если быстро приходят команды, ждём и шлём по одной на тип.
-        private var debounceDelay:int = 300; // мс — задержка для группировки команд
+        private var debounceDelay:int = 300; // мс - задержка для группировки команд
         private var debounceTimer:uint = 0;
         private var pendingQueue:Array = []; // элементы: {data,onComplete,onError,preTurnOff}
+        private var useSerial:Boolean = false; // переключение транспорта: false - Wi‑Fi (HTTP), true - COM
+        private var serialPort:String; // например, "COM3"
+        // serialSender ожидает сигнатуру (payload:String, port:String, onComplete:Function, onError:Function):void
+        private var serialSender:Function;
 
         public function EspControl(deviceIP:String) {
             this.deviceIP = deviceIP;
             //trace("[ESP] Controller initialized for device: " + deviceIP);
+        }
+
+        public function setUseSerial(value:Boolean):void {
+            useSerial = value;
+        }
+
+        public function setSerialPort(port:String):void {
+            serialPort = port;
+        }
+
+        public function setSerialSender(sender:Function):void {
+            serialSender = sender;
         }
 
         //-----------------------------
@@ -135,17 +151,49 @@
                                           onError:Function = null):void {
 
             var jsonString:String = JSON.stringify(data);
-            var url:String = deviceIP + "/";
-
             var cmdLabel:String = "";
             if (data && data.hasOwnProperty("cmd")) {
                 cmdLabel = String(data["cmd"]);
             }
-            log("Sending request, cmd=" + cmdLabel);
+
+            if (useSerial) {
+                sendJsonSerial(jsonString, cmdLabel, onComplete, onError);
+            } else {
+                sendJsonHttp(jsonString, cmdLabel, onComplete, onError);
+            }
+        }
+
+        private function sendJsonSerial(payload:String,
+                                        cmdLabel:String,
+                                        onComplete:Function,
+                                        onError:Function):void {
+            var portLabel:String = serialPort ? (" (" + serialPort + ")") : "";
+            log("Sending via SERIAL" + portLabel + ", cmd=" + cmdLabel);
+
+            if (serialSender == null) {
+                log("Serial sender is not configured.");
+                if (onError != null) onError("Serial sender is not configured");
+                return;
+            }
+
+            try {
+                serialSender(payload, serialPort, onComplete, onError);
+            } catch (error:Error) {
+                log("Serial send error: " + error.message);
+                if (onError != null) onError("Serial send error: " + error.message);
+            }
+        }
+
+        private function sendJsonHttp(payload:String,
+                                      cmdLabel:String,
+                                      onComplete:Function,
+                                      onError:Function):void {
+            var url:String = deviceIP + "/";
+            log("Sending HTTP request, cmd=" + cmdLabel);
 
             var request:URLRequest = new URLRequest(url);
             request.method = URLRequestMethod.POST;
-            request.data = jsonString;
+            request.data = payload;
             request.requestHeaders.push(new URLRequestHeader("Content-Type", "application/json"));
 
             var loader:URLLoader = new URLLoader();
