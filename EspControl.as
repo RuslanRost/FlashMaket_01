@@ -6,6 +6,9 @@
     import flash.events.Event;
     import flash.events.IOErrorEvent;
     import flash.events.SecurityErrorEvent;
+    import flash.filesystem.File;
+    import flash.filesystem.FileMode;
+    import flash.filesystem.FileStream;
     import flash.utils.setTimeout;
     import flash.utils.clearTimeout;
 
@@ -161,6 +164,8 @@
             } else {
                 sendJsonHttp(jsonString, cmdLabel, onComplete, onError);
             }
+
+            saveLastCommand(jsonString);
         }
 
         private function sendJsonSerial(payload:String,
@@ -221,6 +226,18 @@
             }
         }
 
+        private function saveLastCommand(payload:String):void {
+            try {
+                var file:File = File.applicationStorageDirectory.resolvePath("last_esp_command.json");
+                var fs:FileStream = new FileStream();
+                fs.open(file, FileMode.WRITE);
+                fs.writeUTFBytes(payload);
+                fs.close();
+            } catch (e:Error) {
+                trace("[ESP] Ошибка записи last_esp_command.json: " + e.message);
+            }
+        }
+
         //-----------------------------
         // Get color by status
         //-----------------------------
@@ -239,21 +256,6 @@
         }
 
         //-----------------------------
-        // Get brightness or default 255
-        //-----------------------------
-        private function getBrightness(apartmentId:String):int {
-            var value:* = CRMData.getDataById(apartmentId, "ledbrightness");
-            if (value === null || value === undefined || isNaN(Number(value))) {
-                return 255;
-            }
-
-            var brightness:int = int(value);
-            if (brightness < 0) brightness = 0;
-            if (brightness > 255) brightness = 255;
-            return brightness;
-        }
-
-        //-----------------------------
         // Turn ON one apartment (status-based color)
         //-----------------------------
         public function turnOnApartment(apartmentId:String,
@@ -263,7 +265,6 @@
 
             var ledId:int = CRMData.getDataById(apartmentId, "LedID");
             var status:String = CRMData.getDataById(apartmentId, "status");
-            var brightness:int = getBrightness(apartmentId);
 
             log("Turn ON apartment");
 
@@ -276,7 +277,6 @@
                 cmd: "room_on",
                 room: int(apartmentId),
                 color: getColorByStatus(status),
-                brightness: brightness,
                 effect: effect
             };
 
@@ -295,14 +295,6 @@
                                                  onError:Function=null):void {
 
             var ledId:int = CRMData.getDataById(apartmentId, "LedID");
-            var appliedBrightness:int = brightness;
-
-            // If brightness not provided, fall back to CRM value
-            if (brightness < 0 || brightness > 255) {
-                appliedBrightness = getBrightness(apartmentId);
-            }
-            if (appliedBrightness < 0) appliedBrightness = 0;
-            if (appliedBrightness > 255) appliedBrightness = 255;
 
             log("Turn ON apartment custom color");
 
@@ -315,9 +307,11 @@
                 cmd: "room_on",
                 room: int(apartmentId),
                 color: color,
-                brightness: appliedBrightness,
                 effect: effect
             };
+            if (brightness >= 0 && brightness <= 255) {
+                payload.brightness = brightness;
+            }
 
             // Для одиночной квартиры не отправляем предварительный all_off
             sendJson(payload, onComplete, onError, false);
@@ -392,13 +386,11 @@
             var rooms:Array = [];
             for each (var aptId:String in apartmentIds) {
                 var status:String = CRMData.getDataById(aptId, "status");
-                var brightness:int = getBrightness(aptId);
                 var color:Array = getColorByStatus(status);
 
                 rooms.push({
                     room: int(aptId),
                     color: color,
-                    brightness: brightness,
                     effect: effect
                 });
             }
