@@ -6,9 +6,6 @@
     import flash.events.Event;
     import flash.events.IOErrorEvent;
     import flash.events.SecurityErrorEvent;
-    import flash.filesystem.File;
-    import flash.filesystem.FileMode;
-    import flash.filesystem.FileStream;
     import flash.utils.setTimeout;
     import flash.utils.clearTimeout;
 
@@ -16,29 +13,13 @@
 
         private var deviceIP:String;
         // Простая "анти-дребезг" отправки: если быстро приходят команды, ждём и шлём по одной на тип.
-        private var debounceDelay:int = 300; // мс - задержка для группировки команд
+        private var debounceDelay:int = 300; // мс — задержка для группировки команд
         private var debounceTimer:uint = 0;
         private var pendingQueue:Array = []; // элементы: {data,onComplete,onError,preTurnOff}
-        private var useSerial:Boolean = false; // переключение транспорта: false - Wi‑Fi (HTTP), true - COM
-        private var serialPort:String; // например, "COM3"
-        // serialSender ожидает сигнатуру (payload:String, port:String, onComplete:Function, onError:Function):void
-        private var serialSender:Function;
 
         public function EspControl(deviceIP:String) {
             this.deviceIP = deviceIP;
             //trace("[ESP] Controller initialized for device: " + deviceIP);
-        }
-
-        public function setUseSerial(value:Boolean):void {
-            useSerial = value;
-        }
-
-        public function setSerialPort(port:String):void {
-            serialPort = port;
-        }
-
-        public function setSerialSender(sender:Function):void {
-            serialSender = sender;
         }
 
         //-----------------------------
@@ -154,51 +135,17 @@
                                           onError:Function = null):void {
 
             var jsonString:String = JSON.stringify(data);
+            var url:String = deviceIP + "/";
+
             var cmdLabel:String = "";
             if (data && data.hasOwnProperty("cmd")) {
                 cmdLabel = String(data["cmd"]);
             }
-
-            if (useSerial) {
-                sendJsonSerial(jsonString, cmdLabel, onComplete, onError);
-            } else {
-                sendJsonHttp(jsonString, cmdLabel, onComplete, onError);
-            }
-
-            saveLastCommand(jsonString);
-        }
-
-        private function sendJsonSerial(payload:String,
-                                        cmdLabel:String,
-                                        onComplete:Function,
-                                        onError:Function):void {
-            var portLabel:String = serialPort ? (" (" + serialPort + ")") : "";
-            log("Sending via SERIAL" + portLabel + ", cmd=" + cmdLabel);
-
-            if (serialSender == null) {
-                log("Serial sender is not configured.");
-                if (onError != null) onError("Serial sender is not configured");
-                return;
-            }
-
-            try {
-                serialSender(payload, serialPort, onComplete, onError);
-            } catch (error:Error) {
-                log("Serial send error: " + error.message);
-                if (onError != null) onError("Serial send error: " + error.message);
-            }
-        }
-
-        private function sendJsonHttp(payload:String,
-                                      cmdLabel:String,
-                                      onComplete:Function,
-                                      onError:Function):void {
-            var url:String = deviceIP + "/";
-            log("Sending HTTP request, cmd=" + cmdLabel);
+            log("Sending request, cmd=" + cmdLabel);
 
             var request:URLRequest = new URLRequest(url);
             request.method = URLRequestMethod.POST;
-            request.data = payload;
+            request.data = jsonString;
             request.requestHeaders.push(new URLRequestHeader("Content-Type", "application/json"));
 
             var loader:URLLoader = new URLLoader();
@@ -226,18 +173,6 @@
             }
         }
 
-        private function saveLastCommand(payload:String):void {
-            try {
-                var file:File = File.applicationStorageDirectory.resolvePath("last_esp_command.json");
-                var fs:FileStream = new FileStream();
-                fs.open(file, FileMode.WRITE);
-                fs.writeUTFBytes(payload);
-                fs.close();
-            } catch (e:Error) {
-                trace("[ESP] Ошибка записи last_esp_command.json: " + e.message);
-            }
-        }
-
         //-----------------------------
         // Get color by status
         //-----------------------------
@@ -256,6 +191,21 @@
         }
 
         //-----------------------------
+        // Get brightness or default 255
+        //-----------------------------
+        private function getBrightness(apartmentId:String):int {
+            var value:* = CRMData.getDataById(apartmentId, "ledbrightness");
+            if (value === null || value === undefined || isNaN(Number(value))) {
+                return 255;
+            }
+
+            var brightness:int = int(value);
+            if (brightness < 0) brightness = 0;
+            if (brightness > 255) brightness = 255;
+            return brightness;
+        }
+
+        //-----------------------------
         // Turn ON one apartment (status-based color)
         //-----------------------------
         public function turnOnApartment(apartmentId:String,
@@ -265,6 +215,7 @@
 
             var ledId:int = CRMData.getDataById(apartmentId, "LedID");
             var status:String = CRMData.getDataById(apartmentId, "status");
+            var brightness:int = getBrightness(apartmentId);
 
             log("Turn ON apartment");
 
@@ -277,6 +228,7 @@
                 cmd: "room_on",
                 room: int(apartmentId),
                 color: getColorByStatus(status),
+                brightness: brightness,
                 effect: effect
             };
 
@@ -295,6 +247,14 @@
                                                  onError:Function=null):void {
 
             var ledId:int = CRMData.getDataById(apartmentId, "LedID");
+            var appliedBrightness:int = brightness;
+
+            // If brightness not provided, fall back to CRM value
+            if (brightness < 0 || brightness > 255) {
+                appliedBrightness = getBrightness(apartmentId);
+            }
+            if (appliedBrightness < 0) appliedBrightness = 0;
+            if (appliedBrightness > 255) appliedBrightness = 255;
 
             log("Turn ON apartment custom color");
 
@@ -307,11 +267,9 @@
                 cmd: "room_on",
                 room: int(apartmentId),
                 color: color,
+                brightness: appliedBrightness,
                 effect: effect
             };
-            if (brightness >= 0 && brightness <= 255) {
-                payload.brightness = brightness;
-            }
 
             // Для одиночной квартиры не отправляем предварительный all_off
             sendJson(payload, onComplete, onError, false);
@@ -386,11 +344,13 @@
             var rooms:Array = [];
             for each (var aptId:String in apartmentIds) {
                 var status:String = CRMData.getDataById(aptId, "status");
+                var brightness:int = getBrightness(aptId);
                 var color:Array = getColorByStatus(status);
 
                 rooms.push({
                     room: int(aptId),
                     color: color,
+                    brightness: brightness,
                     effect: effect
                 });
             }
