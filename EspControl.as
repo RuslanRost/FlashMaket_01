@@ -8,6 +8,7 @@
     import flash.events.SecurityErrorEvent;
     import flash.utils.setTimeout;
     import flash.utils.clearTimeout;
+    import AppConfig;
 
     public class EspControl {
 
@@ -141,7 +142,7 @@
             if (data && data.hasOwnProperty("cmd")) {
                 cmdLabel = String(data["cmd"]);
             }
-            log("Sending request, cmd=" + cmdLabel);
+            log("Sending request, cmd=" + cmdLabel + ", payload=" + jsonString);
 
             var request:URLRequest = new URLRequest(url);
             request.method = URLRequestMethod.POST;
@@ -177,17 +178,7 @@
         // Get color by status
         //-----------------------------
         private function getColorByStatus(status:String):Array {
-            if (!status) return [255, 255, 255];
-
-            switch(status.toLowerCase()) {
-                case "available":  return [0, 255, 0];
-                case "reserved":   return [255, 255, 0];
-                case "occupied":   return [255, 0, 0];
-                case "сlosed for sale":
-                case "closed for sale":
-                    return [255, 255, 255];
-            }
-            return [255, 255, 255];
+            return AppConfig.getLedColorRGB(status);
         }
 
         //-----------------------------

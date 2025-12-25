@@ -1,4 +1,5 @@
 ﻿package {
+    import AppConfig;
     public class LedController {
 
         private var esp:EspControl;
@@ -25,13 +26,7 @@
         // ���� �� ������� (��������� ������ ��� LedController)
         //----------------------------------------------
         private function getHexColorByStatus(status:String):String {
-            switch(status) {
-                case "Available": return "#00FF00";       // ������
-                case "Reserved": return "#FFFF00";        // �����
-                case "Occupied": return "#FF0000";        // �������
-                case "Closed for sale": return "#FFFFFF"; // �����
-                default: return "#000000";                 // ������
-            }
+            return AppConfig.getLedColorHex(status);
         }
 
         //----------------------------------------------
