@@ -83,8 +83,8 @@
             var statusMap:Object = {
                 "свободно": "Available",
                 "бронь": "Reserved",
-                "куплено": "Occupied",
-                "закрыт к продаже": "Сlosed for sale",
+                "продано": "Occupied",
+                "резерв": "Сlosed for sale",
                 "available": "Available",
                 "reserved": "Reserved",
                 "occupied": "Occupied",
