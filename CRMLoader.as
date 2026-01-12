@@ -139,15 +139,15 @@
 
                 if (apt.hasOwnProperty("plan") && apt.plan != null && String(apt.plan) != "") {
                     updated.plan = apt.plan;
-                    addImageUrl(String(apt.plan));
+                    addImageValue(apt.plan);
                 } else if (apt.hasOwnProperty("plan_image") && apt.plan_image != null && String(apt.plan_image) != "") {
                     updated.plan = apt.plan_image;
-                    addImageUrl(String(apt.plan_image));
+                    addImageValue(apt.plan_image);
                 }
 
                 if (apt.hasOwnProperty("preview") && apt.preview != null && String(apt.preview) != "") {
                     updated.base_image = apt.preview;
-                    addImageUrl(String(apt.preview));
+                    addImageValue(apt.preview);
                 }
 
                 if (apt.hasOwnProperty("images") && apt.images != null && apt.images is Array && (apt.images as Array).length > 0) {
@@ -202,6 +202,14 @@
             }
         }
 
+        private function addImageValue(value:*):void {
+            if (value is Array) {
+                collectRenderImages(value as Array);
+            } else {
+                addImageUrl(String(value));
+            }
+        }
+
         private function collectRenderImages(arr:Array):void {
             for each (var raw:* in arr) {
                 var url:String = String(raw);
@@ -212,8 +220,8 @@
         private function collectImagesFromResult():void {
             for each (var apt:Object in resultData) {
                 if (!apt) continue;
-                if (apt.hasOwnProperty("base_image")) addImageUrl(String(apt.base_image));
-                if (apt.hasOwnProperty("plan")) addImageUrl(String(apt.plan));
+                if (apt.hasOwnProperty("base_image")) addImageValue(apt.base_image);
+                if (apt.hasOwnProperty("plan")) addImageValue(apt.plan);
 
                 if (apt.hasOwnProperty("render")) {
                     var render:* = apt.render;

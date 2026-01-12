@@ -4,12 +4,15 @@ package {
     import flash.display.DisplayObjectContainer;
     import flash.events.MouseEvent;
     import flash.events.Event;
+    import CRMData;
+    import ImageCache;
 
     public class FloorSelector extends MovieClip {
         private var buttons:Array;
         private var _applyScheduled:Boolean = false;
         private var _retryCount:int = 0;
         private var _applyRemaining:int = 0; // сколько раз подряд применяем после успешного поиска панели
+        private var _currentFloor:int = -1;
 
         public function FloorSelector() {
             super();
@@ -51,6 +54,7 @@ package {
             }
 
             updateStateByFrame(currentFrame);
+            handleFloorChange(currentFrame);
             scheduleFilterApply();
         }
 
@@ -101,6 +105,7 @@ package {
             if (this.parent && this.parent is MovieClip) {
                 MovieClip(this.parent).gotoAndStop(frameNum);
                 trace("[FloorSelector] ? Кадр изменён");
+                handleFloorChange(frameNum);
                 scheduleFilterApply();
             } else {
                 trace("[FloorSelector] ? Родитель не MovieClip");
@@ -176,6 +181,82 @@ package {
                 }
             }
             return null;
+        }
+
+        private function handleFloorChange(newFloor:int):void {
+            if (newFloor <= 0 || newFloor == _currentFloor) return;
+
+            var oldFloor:int = _currentFloor;
+            _currentFloor = newFloor;
+
+            var newUrls:Array = collectFloorImageUrls(newFloor);
+            ImageCache.prefetchUrls(newUrls);
+
+            if (oldFloor > 0) {
+                var oldUrls:Array = collectFloorImageUrls(oldFloor);
+                var toPurge:Array = diffUrls(oldUrls, newUrls);
+                ImageCache.purgeUrls(toPurge);
+            }
+        }
+
+        private function collectFloorImageUrls(floor:int):Array {
+            var data:Object = CRMData.getAllData();
+            var unique:Object = {};
+            var list:Array = [];
+
+            for (var id:String in data) {
+                if (extractFloorNumber(id) != floor) continue;
+                var apt:Object = data[id];
+                if (!apt) continue;
+                addImageValue(apt.base_image, unique, list);
+                addImageValue(apt.plan, unique, list);
+                addImageValue(apt.render, unique, list);
+            }
+
+            return list;
+        }
+
+        private function addImageValue(value:*, unique:Object, list:Array):void {
+            if (value is Array) {
+                for each (var raw:* in (value as Array)) {
+                    addImageUrl(String(raw), unique, list);
+                }
+            } else {
+                addImageUrl(String(value), unique, list);
+            }
+        }
+
+        private function addImageUrl(url:String, unique:Object, list:Array):void {
+            if (!url || url.length == 0) return;
+            if (unique[url]) return;
+            unique[url] = true;
+            list.push(url);
+        }
+
+        private function diffUrls(oldUrls:Array, newUrls:Array):Array {
+            var newSet:Object = {};
+            for each (var nu:* in newUrls) {
+                var n:String = String(nu);
+                if (n && n.length > 0) newSet[n] = true;
+            }
+            var result:Array = [];
+            for each (var ou:* in oldUrls) {
+                var o:String = String(ou);
+                if (o && o.length > 0 && !newSet[o]) {
+                    result.push(o);
+                }
+            }
+            return result;
+        }
+
+        private function extractFloorNumber(apartmentId:String):int {
+            if (!apartmentId || apartmentId.length == 0) return -1;
+            var firstChar:String = apartmentId.charAt(0);
+            var n:int = parseInt(firstChar);
+            if (isNaN(n)) {
+                return -1;
+            }
+            return n;
         }
     }
 }
